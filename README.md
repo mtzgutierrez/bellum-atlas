@@ -1,2 +1,5 @@
-# ares-codex
-Ares codex is the place where war judges by data and numbers. Explore and compare historical conflicts in this epic page. Make for history lovers.
+# Ares Codex
+
+## Introduction
+Welcome to Arex Codex, a comprehensive resource for history lovers, students, and educators. This platform provides information about historical battles and wars, which can be used for educational purposes, research, or simply to satisfy your curiosity about historical events.
+
