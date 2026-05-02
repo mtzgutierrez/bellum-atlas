@@ -1,0 +1,17 @@
+services:
+  backend:
+    build:
+      target: production
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  frontend:
+    build:
+      target: production
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped

@@ -1,0 +1,82 @@
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT}:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ares_codex_app_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: raulmartinezz402@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: raul
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+
+  backend:
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    ports:
+      - "${BACKEND_PORT}:3000"
+    command: npm run start:dev
+    env_file:
+      - ./backend/.env
+
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "${FRONTEND_PORT}:5173"
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "1000"
+    command: npm run dev -- --host
+
+  # ─── SonarQube ───────────────────────────────────────────
+  sonar-db:
+    image: postgres:18.1-alpine
+    container_name: ares_codex_app_sonar_postgres
+    environment:
+      POSTGRES_DB: sonar
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: sonar
+    volumes:
+      - sonar_postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar -d sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: ares_codex_app_sonarqube
+    depends_on:
+      sonar-db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonar
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    networks:
+      - app-network
+
+volumes:
+  sonar_postgres_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
