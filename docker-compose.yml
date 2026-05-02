@@ -56,19 +56,18 @@ services:
   scraper:
     build:
       context: ./scraper
-      dockerfile: Dockerfile
-    restart: no               
+      target: ${BUILD_TARGET:-development}
+    container_name: ares_codex_app_scraper
+    restart: no
     environment:
-      DB_HOST: db
+      DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-appdb}
-      DB_USER: ${POSTGRES_USER:-appuser}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
-    volumes:
-      - ./scraper:/app
     networks:
       - app-network
 

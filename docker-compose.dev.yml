@@ -38,6 +38,12 @@ services:
       CHOKIDAR_INTERVAL: "1000"
     command: npm run dev -- --host
 
+  scraper:
+    volumes:
+      - ./scraper:/app
+    environment:
+      ENV: development
+
   # ─── SonarQube ───────────────────────────────────────────
   sonar-db:
     image: postgres:18.1-alpine

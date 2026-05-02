@@ -1,0 +1,42 @@
+{
+  "name": "Ares Codex App - Scraper (Scrapy)",
+
+  "dockerComposeFile": [
+    "../../docker-compose.yml",
+    "../../docker-compose.dev.yml"
+  ],
+
+  "service": "scraper",
+
+  "workspaceFolder": "/app",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.pylint",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter"
+        },
+        "workbench.colorCustomizations": {
+          "titleBar.activeBackground": "#1a6b1a",
+          "titleBar.activeForeground": "#FFFFFF",
+          "titleBar.inactiveBackground": "#0d3d0d99",
+          "titleBar.inactiveForeground": "#FFFFFFCC"
+        }
+      }
+    }
+  },
+
+  "forwardPorts": [6023],
+
+  "remoteUser": "root"
+}
