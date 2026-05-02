@@ -1,0 +1,38 @@
+{
+  "name": "Ares Codex App - Frontend (Vite + React)",
+
+  "dockerComposeFile": [
+    "../../docker-compose.yml",
+    "../../docker-compose.dev.yml"
+  ],
+
+  "service": "frontend",
+  "workspaceFolder": "/app",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "formulahendry.auto-rename-tag",
+        "christian-kohler.path-intellisense",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "workbench.colorCustomizations": {
+          "titleBar.activeBackground": "#00eeff",
+          "titleBar.activeForeground": "#000000",
+          "titleBar.inactiveBackground": "#61DAFB99",
+          "titleBar.inactiveForeground": "#000000CC"
+        }
+      }
+    }
+  },
+
+  "postCreateCommand": "npm install",
+
+  "forwardPorts": [5173]
+}

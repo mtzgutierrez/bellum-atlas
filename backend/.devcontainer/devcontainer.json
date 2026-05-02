@@ -1,0 +1,52 @@
+{
+  "name": "Ares Codex App - Backend (NestJS)",
+
+  // Levanta AMBOS compose files, igual que tu "docker compose -f ... -f ..."
+  "dockerComposeFile": [
+    "../../docker-compose.yml",
+    "../../docker-compose.dev.yml"
+  ],
+
+  // Se conecta al servicio "backend" del compose
+  "service": "backend",
+
+  // Carpeta de trabajo dentro del contenedor (coincide con tu WORKDIR /app)
+  "workspaceFolder": "/app",
+
+  // Extensiones y settings que se instalan DENTRO del contenedor
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "prisma.prisma",
+        "firsttris.vscode-jest-runner",
+        "ms-azuretools.vscode-docker",
+        "postman.postman-for-vscode",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "workbench.colorCustomizations": {
+          "titleBar.activeBackground": "#ff0202",
+          "titleBar.activeForeground": "#FFFFFF",
+          "titleBar.inactiveBackground": "#1f020299",
+          "titleBar.inactiveForeground": "#FFFFFFCC"
+        }
+      }
+    }
+  },
+
+  // Después de crear el contenedor: migrar BD y generar Prisma client
+  "postCreateCommand": "sudo chown -R node:node /app && npx prisma generate && npx prisma migrate dev",
+
+  // Puertos que VS Code reenviará automáticamente a tu máquina
+  "forwardPorts": [3000, 5432, 5050],
+
+  // Usuario node (ya existe en node:24-alpine)
+  "remoteUser": "node"
+}

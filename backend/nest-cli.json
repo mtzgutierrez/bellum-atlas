@@ -3,6 +3,19 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "builder": "swc",
+    "typeCheck": false,
+    "assets": [
+      {
+        "include": "**/*.hbs",
+        "outDir": "dist",
+        "watchAssets": true
+      }
+    ]
+  },
+  "watchOptions": {
+    "usePolling": true,
+    "interval": 1000
   }
 }
