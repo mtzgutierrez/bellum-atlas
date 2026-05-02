@@ -53,4 +53,9 @@ services:
     networks:
       - app-network
 
-    
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge

@@ -42,7 +42,7 @@
   },
 
   // Después de crear el contenedor: migrar BD y generar Prisma client
-  "postCreateCommand": "sudo chown -R node:node /app && npx prisma generate && npx prisma migrate dev",
+  "postCreateCommand": "sudo chown -R node:node /app && npx prisma migrate dev",
 
   // Puertos que VS Code reenviará automáticamente a tu máquina
   "forwardPorts": [3000, 5432, 5050],
