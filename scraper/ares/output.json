@@ -1,0 +1,16 @@
+[
+{
+    "title": "Batalla del Ebro", 
+    "imageUrl": "//upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Forces_of_the_Spanish_Government_Crossing_the_Ebro_-_Google_Art_Project.jpg/330px-Forces_of_the_Spanish_Government_Crossing_the_Ebro_-_Google_Art_Project.jpg", 
+    "date": "25 de julio-16 de noviembre de 1938", 
+    "place": "Tierra Alta  y  río Ebro ,  Tarragona ,  España", 
+    "coordinates": "41°09′50″N  0°28′30″E ﻿  /  ﻿ 41.163888888889,  0.475", 
+    "result": "Victoria inicial republicana [ nota 1 ] Victoria decisiva sublevada [ nota 2 ]", 
+    "belligerents": 
+        {"side1": 
+            "| República Española | \n |   | Brigadas Internacionales", 
+        "side2": "| Bando sublevado | \n |   | Alemania nazi | \n |   | Reino de Italia"}, 
+        "commanders": 
+        {"side1": "| Vicente Rojo Lluch |   | Juan  | Modesto |   | Enrique Líster |   | Manuel Tagüeña |   | Etelvino Vega |   | José del Barrio |   | Hans Kahle |   | Domiciano Leal |   |   | † |   | Manuel Álvarez |   |   | † |   | El Esquinazau", "side2": "| Francisco Franco |   | Fidel Dávila |   | Juan Yagüe |   | Rafael García Valiño |   | Francisco Delgado |   | Fernando Barrón |   | El Mizziam"}, "strength": {"side1": "Ejército del Ebro |   | • 100 |   | 000-130 |   | 000 hombres (final de la batalla) | [ | 1 | ] | • 250 piezas de artillería de campaña | [ | 2 | ] | • 27 piezas de artillería antiaérea | • 120 tanques y vehículos blindados | [ | 3 | ] | Aviación Republicana (F.A.R.E.) | • 24 bombarderos  | SB-2 |  «Katiuska»  | • 90  | I-16 |  tipo 10 «Supermosca» | • 20  | I-16 |  tipo 6 | • 40  | I-15 |  «Chato» | • 30  | Grumman FF | (Más de 200 aviones)", "side2": "Ejército del Norte | [ | nota 3 | ] | • 98 |   | 000 hombres-185 |   | 000 (final de la batalla) | [ | 4 | ] | • 550 piezas de artillería | Legión Cóndor | • 36  | He-111 | • 18  | Bf-109 |  C y D | • 7  | Ju-87 |  Stuka | Aviación Legionaria | • 50  | Fiat C.R.32 | • 60  | Savoia S-79 |  y  | S-81 | (más de 300 aviones)"}, "casualties": {"side1": "Total | : 46 |   | 713 bajas | [ | 5 | ] | 7150 muertos | 20 |   | 000 heridos | 19 |   | 563 prisioneros | ≈ 100  | aviones |  derribados", 
+        "side2": "Total | : 41 |   | 500 bajas | [ | 6 | ] | [ | 7 | ] | 6500 muertos | 30 |   | 000 heridos | 5000 prisioneros | ≈ 50  | aviones |  derribados"}}
+]

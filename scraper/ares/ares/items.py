@@ -6,11 +6,10 @@
 import scrapy
 
 
-class AresItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
+class WikipediaItem(scrapy.Item):
+    type = scrapy.Field()
     title = scrapy.Field()
-    image = scrapy.Field()
+    imageUrl = scrapy.Field()
     date = scrapy.Field()
     place = scrapy.Field()
     coordinates = scrapy.Field()
