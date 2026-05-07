@@ -1,97 +1,189 @@
 # Modelo de datos
 
-El esquema Prisma está diseñado para ser extensible sin migraciones destructivas. Las features post-MVP se añaden como modelos nuevos que referencian los existentes por foreign key.
+El esquema Prisma está diseñado para reflejar fielmente la estructura de las infoboxes de Wikipedia: dos bandos por enfrentamiento, con beligerantes, comandantes y bajas por lado.
+
+**Principio de extensibilidad**: las features post-MVP (IA, colecciones, workspace, exportación) se añaden como modelos nuevos que referencian los existentes por foreign key, sin migraciones destructivas.
 
 ---
 
-## Diagrama de entidades
+## Diagrama entidad-relación
 
 ```mermaid
 erDiagram
-    HistoricalEra ||--o{ War : "agrupa"
-    War ||--o{ Battle : "contiene"
-    Battle ||--|| Location : "ocurre en"
-    Battle ||--o{ BattleFaction : "tiene bandos"
-    BattleFaction ||--o{ CommanderFaction : "tiene comandantes"
-    Commander ||--o{ CommanderFaction : "participa en"
-
     HistoricalEra {
-        string id
+        string id PK
         string name
         string slug
+        int    order
     }
-    War {
-        string id
-        string name
-        DateTime startDate
-        DateTime endDate
-        string result
-        string eraId
-        string wikipediaUrl
-    }
-    Battle {
-        string id
-        string name
-        DateTime date
-        string result
-        string warId
-        string locationId
-        string wikipediaUrl
-    }
-    BattleFaction {
-        string id
-        string name
-        string role
-        string result
-        int estimatedCasualties
-        string battleId
-    }
-    Commander {
-        string id
-        string name
-        string country
-        int birthYear
-        int deathYear
-        string wikipediaUrl
-    }
+
     Location {
-        string id
+        string id PK
         string name
         string country
-        float latitude
-        float longitude
+        float  lat
+        float  lon
     }
+
+    War {
+        string   id PK
+        string   name
+        string   slug
+        string   description
+        datetime startDate
+        datetime endDate
+        string   result
+        string   imageUrl
+        string   wikipediaUrl
+        string   eraId FK
+        string   locationId FK
+    }
+
+    Battle {
+        string   id PK
+        string   name
+        string   slug
+        string   description
+        datetime date
+        string   dateText
+        string   result
+        enum     type
+        string   imageUrl
+        string   wikipediaUrl
+        string   eraId FK
+        string   locationId FK
+    }
+
+    BattleWar {
+        string battleId PK,FK
+        string warId    PK,FK
+    }
+
+    BattleFaction {
+        string id PK
+        int    side
+        string belligerents
+        string result
+        string strengthRaw
+        string casualtiesRaw
+        int    casualtiesMin
+        int    casualtiesMax
+        string battleId FK
+    }
+
+    WarFaction {
+        string id PK
+        int    side
+        string belligerents
+        string result
+        string warId FK
+    }
+
+    Commander {
+        string id PK
+        string name
+        string country
+        int    birthYear
+        int    deathYear
+        string description
+        string imageUrl
+        string wikipediaUrl
+    }
+
+    CommanderBattleFaction {
+        string commanderId     PK,FK
+        string battleFactionId PK,FK
+    }
+
+    CommanderWarFaction {
+        string commanderId  PK,FK
+        string warFactionId PK,FK
+    }
+
+    HistoricalEra ||--o{ War            : "agrupa"
+    HistoricalEra ||--o{ Battle         : "agrupa"
+    Location      ||--o{ Battle         : "sitúa"
+    Location      ||--o{ War            : "sitúa"
+    War           ||--o{ BattleWar      : "tiene"
+    Battle        ||--o{ BattleWar      : "pertenece a"
+    Battle        ||--o{ BattleFaction  : "tiene bandos"
+    War           ||--o{ WarFaction     : "tiene bandos"
+    BattleFaction ||--o{ CommanderBattleFaction : "tiene"
+    Commander     ||--o{ CommanderBattleFaction : "participa"
+    WarFaction    ||--o{ CommanderWarFaction    : "tiene"
+    Commander     ||--o{ CommanderWarFaction    : "participa"
 ```
 
 ---
 
-## Entidades
+## Relaciones clave
 
-### `HistoricalEra`
-Agrupa los conflictos por período histórico. Valores predefinidos: Antigüedad, Edad Media, Era Moderna, Contemporánea, Siglo XX, Siglo XXI.
+### Battle ↔ War (muchos a muchos)
 
-### `War`
-Conflicto padre. Puede contener cero o más batallas. Campos clave: `startDate`, `endDate`, `result`, `eraId`, `wikipediaUrl`.
+Una batalla puede pertenecer a 0 o más guerras (ej: la Batalla del Atlántico forma parte de la Segunda Guerra Mundial y de la Batalla del Atlántico como conflicto). Una guerra contiene 0 o más batallas.
 
-### `Battle`
-Enfrentamiento concreto dentro de una guerra. Siempre pertenece a una `War` y tiene una `Location`. Campos clave: `date`, `result`, `warId`, `locationId`, `wikipediaUrl`.
+La tabla de unión `BattleWar` no tiene campos extra: solo el par `(battleId, warId)`.
 
-### `BattleFaction`
-Cada bando en una batalla. `role` puede ser `attacker` o `defender`. `result` indica si ese bando ganó, perdió o empató. `estimatedCasualties` puede ser `null` si no se conoce.
+### Commander ↔ Battle y Commander ↔ War
 
-### `Commander`
-Persona que mandó tropas. Se relaciona con facciones a través de `CommanderFaction` (muchos-a-muchos).
+Los comandantes se vinculan a batallas y guerras **a través de las facciones**, no directamente. Esto preserva la información de qué bando comandaron.
 
-### `Location`
-Punto geográfico. `latitude` y `longitude` en WGS84 decimal. En la base de datos se almacena como `GEOMETRY(Point, 4326)` via PostGIS.
+```
+Commander → CommanderBattleFaction → BattleFaction → Battle
+Commander → CommanderWarFaction    → WarFaction    → War
+```
+
+Gracias a esta cadena, se puede consultar:
+- Todas las batallas de un comandante (con su bando y resultado)
+- Todos los comandantes de una batalla, agrupados por bando
+- El ratio de victorias de un comandante
+
+### BattleFaction y WarFaction
+
+Cada `BattleFaction` representa **un bando** de un enfrentamiento (máx. 2 por batalla, identificados por `side = 1` o `side = 2`). Captura exactamente lo que Wikipedia muestra en las infoboxes:
+
+| Campo | Ejemplo |
+|---|---|
+| `belligerents` | `"Francia \| Guardia Imperial"` |
+| `result` | `"victory"` |
+| `strengthRaw` | `"72.000 hombres"` |
+| `casualtiesRaw` | `"40.000–45.000"` |
+| `casualtiesMin` / `casualtiesMax` | `40000` / `45000` |
+
+---
+
+## Notas de implementación
+
+### PostGIS
+Prisma no soporta nativamente el tipo `GEOMETRY` de PostGIS. La estrategia es:
+
+1. Prisma gestiona `lat` y `lon` como `Float` (fuente de verdad).
+2. Una migración raw añade la columna `geom` como columna generada:
+
+```sql
+-- En una migración manual tras `prisma migrate dev`
+ALTER TABLE locations
+  ADD COLUMN geom geometry(Point, 4326)
+    GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(lon, lat), 4326)) STORED;
+
+CREATE INDEX locations_geom_idx ON locations USING GIST (geom);
+```
+
+### `dateText`
+El campo `dateText` en `Battle` almacena el texto raw de Wikipedia antes de parsearlo (ej: `"18 de junio de 1815"`). Sirve de fallback cuando el parsing falla y para auditoría del scraper.
+
+### `slug`
+Todos los modelos principales tienen `slug` con `@unique`. Se genera a partir del nombre (kebab-case, sin acentos). Permite URLs limpias sin exponer el ID interno.
 
 ---
 
 ## Modelos futuros (post-MVP)
 
-| Modelo | Propósito |
-|---|---|
-| `CasualtyReport` | Desglose detallado de bajas por categoría |
-| `ResearchNote` | Notas del usuario vinculadas a una batalla o guerra |
-| `Collection` | Listas de batallas guardadas por el usuario |
-| `AIAnalysis` | Análisis estratégico generado por Claude API |
+Se añadirán como tablas independientes que referencian las existentes:
+
+| Modelo | Referencia | Propósito |
+|---|---|---|
+| `ResearchNote` | `Battle`, `War` | Notas de usuario vinculadas a un evento |
+| `Collection` | `Battle`, `War` | Listas temáticas del usuario |
+| `AIAnalysis` | `Battle`, `War` | Análisis estratégico generado por Claude API |
+| `User` | — | Autenticación (semana 2+ del MVP) |

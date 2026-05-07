@@ -80,6 +80,7 @@ nav:
       - Visión general: frontend/index.md
       - Páginas: frontend/paginas.md
       - Map Explorer: frontend/mapa.md
+  - Guía de Estilos: guia-estilos.md
   - Desarrollo:
       - Entorno local: desarrollo/local.md
       - Docker Compose: desarrollo/docker.md
