@@ -4,6 +4,8 @@ services:
       - "${POSTGRES_PORT}:5432"
 
   pgadmin:
+    profiles:
+      - manual
     image: dpage/pgadmin4:latest
     container_name: ares_codex_app_pgadmin
     environment:
@@ -39,6 +41,8 @@ services:
     command: npm run dev -- --host
 
   scraper:
+    profiles:
+      - manual
     volumes:
       - ./scraper:/app
     environment:
@@ -46,6 +50,8 @@ services:
 
   # ─── SonarQube ───────────────────────────────────────────
   sonar-db:
+    profiles:
+      - manual
     image: postgres:18.1-alpine
     container_name: ares_codex_app_sonar_postgres
     environment:
@@ -63,6 +69,8 @@ services:
       retries: 5
 
   sonarqube:
+    profiles:
+      - manual
     image: sonarqube:community
     container_name: ares_codex_app_sonarqube
     depends_on:

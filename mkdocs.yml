@@ -1,0 +1,87 @@
+site_name: AresCodex Docs
+site_description: Atlas histórico interactivo de conflictos militares
+site_author: AresCodex Team
+docs_dir: docs
+repo_url: https://github.com/tu-usuario/ares-codex
+repo_name: ares-codex
+
+theme:
+  name: material
+  language: es
+  palette:
+    - scheme: slate
+      primary: red
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Modo claro
+    - scheme: default
+      primary: red
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Modo oscuro
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search:
+      lang: es
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Inicio: index.md
+  - Arquitectura:
+      - Visión general: arquitectura/index.md
+      - Stack tecnológico: arquitectura/stack.md
+      - Modelo de datos: arquitectura/modelo-datos.md
+      - Flujo de datos: arquitectura/flujo-datos.md
+  - Scraper:
+      - Visión general: scraper/index.md
+      - Spider de Wikipedia: scraper/spider.md
+      - Items y campos: scraper/items.md
+      - Configuración: scraper/configuracion.md
+  - Backend:
+      - Visión general: backend/index.md
+      - Módulos NestJS: backend/modulos.md
+      - API Reference: backend/api.md
+  - Frontend:
+      - Visión general: frontend/index.md
+      - Páginas: frontend/paginas.md
+      - Map Explorer: frontend/mapa.md
+  - Desarrollo:
+      - Entorno local: desarrollo/local.md
+      - Docker Compose: desarrollo/docker.md
+      - Variables de entorno: desarrollo/env.md
+  - Roadmap: roadmap.md
