@@ -1,64 +1,98 @@
 # Páginas
 
+Cada página existe en dos variantes: `Desktop` y `Mobile`. El componente raíz detecta `window.innerWidth < 768` y renderiza la variante correspondiente.
+
 ---
 
 ## Home (`/`)
 
-Primera impresión del producto. Sencilla pero impactante.
+**Variante B — Cinematográfica ("grabado a sangre")**
 
-- **Contadores animados** al cargar: total de batallas, guerras, países involucrados, rango de años
-- **Barra de búsqueda** global prominente (navega a `/battles?q=...`)
-- **Accesos directos**: Explorar mapa, Ver timeline, Batallas más conocidas
+El hero ocupa 540px de altura, fondo de grabado con soldados-silueta SVG y degradado de humo. La batalla del día (Lepanto) se muestra con tipografía Cinzel a 96px en dos líneas, con el nombre final en dorado.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  TopBar (compact, blur)                                 │
+├─────────────────────────────────────────────────────────┤
+│  [HERO 540px — engraving + siluetas + humo]             │
+│  · Despacho del día stamp                               │
+│  · ResultBadge + metadata mono                          │
+│  · BATALLA DE / LEPANTO (96px Cinzel, gold)             │
+│  · Descripción · CTA primario · stats inline            │
+│  · Flechas de paginación                                │
+├─────────────────────────────────────────────────────────┤
+│  [CONTADORES — 88px Cinzel: 5.247 / 412 / 193 / 3.235] │
+├─────────────────────────────────────────────────────────┤
+│  [ENTRY POINTS — grid 1.4fr / 1fr / 1fr]               │
+│  · Map Explorer (MapBackdrop + pins)                    │
+│  · Catálogo (preview de búsquedas)                      │
+│  · Cronología (preview de siglos)                       │
+└─────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Catálogo de batallas (`/battles`)
+## Catálogo (`/battles`)
 
-El núcleo funcional. Búsqueda rápida y filtros combinables.
+Búsqueda full-text reactiva (sin debounce, filtra sobre los datos mock) con sidebar de filtros por era, tipo y resultado.
 
-- Búsqueda full-text sobre nombre, guerra, comandantes y lugar
-- Filtros: era histórica, país, resultado, tipo (terrestre/naval/aéreo/asedio)
-- Resultados paginados con tarjetas: nombre, fecha, guerra padre, bando ganador, lugar
-- Ordenación por fecha, nombre o número de bajas
-- **URL con parámetros** para que los resultados sean compartibles (`/battles?q=Waterloo&result=victory`)
+- Input de búsqueda: filtra `name`, `war`, `place`
+- Sidebar 240px: checkboxes con contadores (sin bordes redondeados)
+- Resultados: columna de `BattleCard` completas con borde izquierdo de color
+- Estados: lista vacía con mensaje de orientación
 
 ---
 
 ## Ficha de batalla (`/battles/:id`)
 
-Página central de la aplicación.
+Carga la batalla por `id` del array mock. Si no existe, muestra Stalingrado como fallback.
 
-- Cabecera: nombre, fecha, guerra padre, resultado destacado
-- **Mini-mapa embebido** (Mapbox) centrado en la ubicación exacta
-- Sección de facciones: cada bando con comandantes, bajas estimadas y resultado
-- Descripción extraída de Wikipedia con enlace al artículo original
-- **Batallas relacionadas**: otras batallas de la misma guerra, ordenadas cronológicamente
+**Secciones:**
 
----
-
-## Ficha de guerra (`/wars/:id`)
-
-- Nombre, período completo, resultado global y descripción
-- Lista completa de batallas ordenadas cronológicamente
-- Estadísticas básicas: número de batallas, total de bajas, duración en días
-- **Mini-mapa** con todos los pins de las batallas de esa guerra
+1. **Breadcrumb** → Batallas → [guerra] → [batalla]
+2. **Hero** (2 col): título 64px + metadata | mini-mapa MapBackdrop con pin central
+3. **Stats strip** (5 col): efectivos, bajas, ubicación, era, resultado
+4. **Facciones** (3 col): FactionColumn izquierda | divider con VS | FactionColumn derecha alineada a la derecha
+5. **Batallas relacionadas**: grid 3 col de BattleCard compact, filtradas por `war`
 
 ---
 
-## Timeline (`/timeline`)
+## Guerras (`/wars` y `/wars/:id`)
 
-Feed histórico cronológico. No es un eje animado (eso es v2): es un listado navegable.
+**Lista:** tabla con columnas nombre / periodo | batallas | bajas | chevron. Clickable a la ficha.
 
-- Batallas y guerras agrupadas por siglo
-- Filtro por era histórica
-- Diseño tipo feed con línea vertical de tiempo y tarjetas laterales
-- Cada ítem: nombre, fecha, resultado y enlace a la ficha
+**Ficha:** header 2 col (título + tabla de stats) + sección de batallas filtradas por `war.name`.
 
 ---
 
-## Perfil de comandante (`/commanders/:id`)
+## Cronología (`/timeline`)
 
-- Nombre, país, años de vida, descripción breve
-- Lista de batallas en las que participó con resultado personal (victoria/derrota)
-- Ratio de victorias: `victorias / total batallas`
-- Enlace a Wikipedia
+Línea dorada vertical con grupos por siglo. Cada grupo tiene:
+
+- Dot dorado en la línea
+- Header: siglo + línea divisoria + contador de batallas
+- Grid 3 col de BattleCard compact
+
+Siglos incluidos: s. V a. C., s. III a. C., s. VIII, s. XV, s. XVI, s. XIX, s. XX.
+
+---
+
+## Comandantes (`/commanders` y `/commanders/:id`)
+
+**Lista:** grid 4 col con tarjetas: retrato (ax-engraving placeholder), nombre, país, años, stats V/D/Total.
+
+**Perfil:** layout 2 col — retrato 200px | datos completos con ratio de efectividad + arco de carrera (puntos sobre línea). Grid de batallas relacionadas abajo.
+
+---
+
+## Map Explorer (`/map`)
+
+Mapa full-screen `MapBackdrop` con:
+
+- Pins posicionados manualmente mediante `pinPositions` (coordenadas % del viewport)
+- Clusters fijos decorativos (x2)
+- Barra de filtros flotante centrada en la parte superior (Todos / Victorias / Derrotas / Indeciso)
+- Stats flotantes en esquina superior derecha
+- Leyenda flotante en esquina inferior izquierda
+- Popup al hacer clic en un pin: nombre, fecha, lugar, fuerzas, ResultBadge, tail triangular
+- Click fuera del popup para cerrarlo
