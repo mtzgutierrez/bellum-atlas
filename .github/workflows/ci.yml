@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  checks: write
+
+# Cancel in-flight runs for the same PR or branch when a new commit arrives.
+# Groups by PR number (for pull_request events) or branch name (for push events).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    # Apply working-directory to every step so we don't repeat it.
+    defaults:
+      run:
+        working-directory: backend
+
+    # Unit tests are fully mocked — no real DB is needed.
+    # DATABASE_URL must still be set because:
+    #   • prisma generate reads prisma.config.ts which references it.
+    #   • PrismaService constructor builds a pg.Pool from it (lazy — never connects).
+    env:
+      DATABASE_URL: postgresql://ci_user:ci_pass@localhost:5432/ci_db
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Generate @prisma/client types from schema.prisma.
+      # Tests import MediaSource, Prisma.PrismaClientKnownRequestError, etc.
+      # from @prisma/client, so this step must run before the test step.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # --ci     → non-interactive mode, deterministic output, fails on new snapshots
+      # --forceExit → prevents Jest from hanging due to the pg.Pool open handle
+      #              created by PrismaService (even without an active connection)
+      - name: Run unit tests
+        run: npm test -- --ci --forceExit
