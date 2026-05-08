@@ -4,6 +4,7 @@ import { WarController } from './war.controller';
 
 @Module({
   providers: [WarService],
-  controllers: [WarController]
+  controllers: [WarController],
+  exports: [WarService],
 })
 export class WarModule {}

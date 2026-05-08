@@ -4,6 +4,12 @@ import { MediaSource } from '@prisma/client';
 import { MediaController } from './media.controller';
 import { MediaService } from './media.service';
 
+// @prisma/client is only available after `prisma generate`.
+jest.mock('@prisma/client', () => ({
+  MediaSource: { WIKIMEDIA: 'WIKIMEDIA', CUSTOM: 'CUSTOM', EXTERNAL: 'EXTERNAL' },
+  PrismaClient: jest.fn(),
+}));
+
 // ─── Stub data ────────────────────────────────────────────────────────────────
 
 const MEDIA_STUB = {

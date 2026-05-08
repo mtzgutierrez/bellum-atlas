@@ -5,5 +5,6 @@ import { CommanderController } from './commander.controller';
 @Module({
   controllers: [CommanderController],
   providers: [CommanderService],
+  exports: [CommanderService],
 })
 export class CommanderModule {}

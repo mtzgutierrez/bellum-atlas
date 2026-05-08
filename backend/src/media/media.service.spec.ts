@@ -4,6 +4,26 @@ import { Prisma, MediaSource } from '@prisma/client';
 import { MediaService } from './media.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+// @prisma/client is only available after `prisma generate`.
+// Mock the module so tests run without a generated client.
+jest.mock('@prisma/client', () => {
+  class PrismaClientKnownRequestError extends Error {
+    code: string;
+    clientVersion: string;
+    constructor(message: string, { code, clientVersion }: { code: string; clientVersion: string }) {
+      super(message);
+      this.name = 'PrismaClientKnownRequestError';
+      this.code = code;
+      this.clientVersion = clientVersion;
+    }
+  }
+  return {
+    MediaSource: { WIKIMEDIA: 'WIKIMEDIA', CUSTOM: 'CUSTOM', EXTERNAL: 'EXTERNAL' },
+    Prisma: { PrismaClientKnownRequestError },
+    PrismaClient: jest.fn(),
+  };
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makePrismaError(code: string) {

@@ -4,6 +4,7 @@ import { BattleController } from './battle.controller';
 
 @Module({
   providers: [BattleService],
-  controllers: [BattleController]
+  controllers: [BattleController],
+  exports: [BattleService],
 })
 export class BattleModule {}
