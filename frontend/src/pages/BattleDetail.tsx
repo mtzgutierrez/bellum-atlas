@@ -7,6 +7,8 @@ import FactionColumn from '../components/FactionColumn'
 import MapBackdrop from '../components/MapBackdrop'
 import BattleCard from '../components/BattleCard'
 import { battles } from '../data/mock'
+import { useIsMobile } from '../hooks/useIsMobile'
+import styles from './BattleDetail.module.css'
 
 const factionData: Record<string, {
   faction1: { name: string; members: string[]; commanders: string[]; forces: string; casualties: string; color: string }
@@ -35,51 +37,52 @@ export function BattleDetailDesktop() {
   return (
     <div className="ax-page">
       <TopBarDesktop />
-      <div style={{ overflowY: 'auto', flex: 1 }}>
+      <div className={styles.pageBody}>
         {/* Hero header */}
-        <section style={{ position: 'relative', padding: '40px 56px 36px', borderBottom: '1px solid var(--color-border)' }}>
-          <div className="ax-mono" style={{ fontSize: 11, color: 'var(--color-text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Link to="/battles" style={{ color: 'var(--color-text-secondary)', textDecoration: 'none' }}>Batallas</Link>
+        <section className={styles.hero}>
+          <div className={`ax-mono ${styles.breadcrumb}`}>
+            <Link to="/battles" className={styles.breadcrumbLink}>Batallas</Link>
             <Icon name="chevron-right" size={11} />
-            <span style={{ color: 'var(--color-text-secondary)' }}>{battle.war}</span>
+            <span className={styles.breadcrumbLink}>{battle.war}</span>
             <Icon name="chevron-right" size={11} />
             <span>{battle.name}</span>
           </div>
-          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1fr 320px', gap: 32, alignItems: 'start' }}>
+          <div className={styles.heroLayout}>
             <div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
+              <div className={styles.heroBadgeRow}>
                 <ResultBadge result={battle.result} />
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
-                  <Icon name="sword" size={12} /> {battle.type === 'land' ? 'Terrestre' : battle.type === 'naval' ? 'Naval' : battle.type === 'air' ? 'Aéreo' : 'Asedio'}
+                <span className={styles.heroBattleType}>
+                  <Icon name="sword" size={12} />
+                  {battle.type === 'land' ? 'Terrestre' : battle.type === 'naval' ? 'Naval' : battle.type === 'air' ? 'Aéreo' : 'Asedio'}
                 </span>
               </div>
-              <h1 className="ax-display" style={{ fontSize: 64, margin: 0, lineHeight: 0.95, letterSpacing: '0.02em', fontWeight: 900 }}>
+              <h1 className={`ax-display ${styles.heroTitle}`}>
                 {battle.name.split(' ').slice(0, -1).join(' ')}<br />
-                <span style={{ color: 'var(--color-gold-bright)' }}>{battle.name.split(' ').slice(-1)[0]}</span>
+                <span className={styles.heroGold}>{battle.name.split(' ').slice(-1)[0]}</span>
               </h1>
-              <div style={{ marginTop: 16, color: 'var(--color-text-secondary)', fontSize: 15, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <div className={styles.heroMeta}>
+                <span className={styles.heroMetaItem}>
                   <Icon name="calendar" size={14} color="var(--color-text-muted)" />
-                  <span className="ax-mono" style={{ fontSize: 13 }}>{battle.dateLabel}</span>
+                  <span className={`ax-mono ${styles.heroMetaDate}`}>{battle.dateLabel}</span>
                 </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span className={styles.heroMetaItem}>
                   <Icon name="map-pin" size={14} color="var(--color-olive-bright)" />
                   {battle.place}
                 </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span className={styles.heroMetaItem}>
                   <Icon name="book" size={14} color="var(--color-text-muted)" />
                   {battle.war}
                 </span>
               </div>
             </div>
-            <div style={{ position: 'relative', height: 200, border: '1px solid var(--color-border)' }}>
+            <div className={styles.miniMap}>
               <MapBackdrop withGrid={false}>
-                <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}>
-                  <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#D4A017', boxShadow: '0 0 22px #D4A01799, 0 0 0 6px rgba(212,160,23,0.18)' }} />
+                <div className={styles.miniMapPin}>
+                  <div className={styles.miniMapDot} />
                 </div>
               </MapBackdrop>
-              <div style={{ position: 'absolute', bottom: 8, left: 10, right: 10, display: 'flex', justifyContent: 'space-between' }}>
-                <span className="ax-mono" style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{battle.lat.toFixed(3)}°N · {battle.lon.toFixed(3)}°E</span>
+              <div className={styles.miniMapFooter}>
+                <span className={`ax-mono ${styles.miniMapCoords}`}>{battle.lat.toFixed(3)}°N · {battle.lon.toFixed(3)}°E</span>
                 <Link to="/map" className="ax-nav-link" style={{ fontSize: 10 }}>En el mapa →</Link>
               </div>
             </div>
@@ -87,7 +90,7 @@ export function BattleDetailDesktop() {
         </section>
 
         {/* Stats strip */}
-        <section style={{ padding: '28px 56px', borderBottom: '1px solid var(--color-border)', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 0 }}>
+        <section className={styles.stats}>
           {[
             ['Efectivos totales', battle.forces, 'ambos bandos'],
             ['Bajas estimadas', battle.casualties, 'documentadas'],
@@ -95,18 +98,18 @@ export function BattleDetailDesktop() {
             ['Era', battle.era, 'período histórico'],
             ['Resultado', battle.resultLabel, battle.type],
           ].map(([l, v, s], i) => (
-            <div key={i} style={{ padding: '0 24px', borderRight: i < 4 ? '1px solid var(--color-border)' : 'none' }}>
-              <div className="ax-stat-label" style={{ fontSize: 9.5, marginBottom: 8 }}>{l}</div>
-              <div className="ax-display" style={{ fontSize: 20, fontWeight: 900, lineHeight: 1.1 }}>{v}</div>
-              <div className="ax-mono" style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 6 }}>{s}</div>
+            <div key={i} className={styles.statItem}>
+              <div className={`ax-stat-label ${styles.statLabel}`}>{l}</div>
+              <div className={`ax-display ${styles.statValue}`}>{v}</div>
+              <div className={`ax-mono ${styles.statSub}`}>{s}</div>
             </div>
           ))}
         </section>
 
         {/* Factions */}
-        <section style={{ padding: '40px 56px', borderBottom: '1px solid var(--color-border)' }}>
-          <div className="ax-stamp" style={{ marginBottom: 20 }}>Bandos enfrentados</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr', gap: 32 }}>
+        <section className={styles.factions}>
+          <div className={`ax-stamp ${styles.factionsStamp}`}>Bandos enfrentados</div>
+          <div className={styles.factionsGrid}>
             <FactionColumn
               side="Bando 1"
               name={factions.faction1.name}
@@ -117,13 +120,8 @@ export function BattleDetailDesktop() {
               result={battle.result === 'victory' ? 'victory' : 'defeat'}
               accentColor={factions.faction1.color}
             />
-            <div style={{ background: 'var(--color-border)', position: 'relative' }}>
-              <div style={{
-                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                width: 32, height: 32, background: 'var(--color-background)',
-                border: '1px solid var(--color-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.1em', color: 'var(--color-gold)',
-              }}>VS</div>
+            <div className={styles.vsDivider}>
+              <div className={styles.vsLabel}>VS</div>
             </div>
             <FactionColumn
               side="Bando 2"
@@ -141,9 +139,9 @@ export function BattleDetailDesktop() {
 
         {/* Related battles */}
         {related.length > 0 && (
-          <section style={{ padding: '40px 56px' }}>
-            <div className="ax-stamp" style={{ marginBottom: 20 }}>Otras batallas de {battle.war}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          <section className={styles.related}>
+            <div className={`ax-stamp ${styles.relatedStamp}`}>Otras batallas de {battle.war}</div>
+            <div className={styles.relatedGrid}>
               {related.map(b => <BattleCard key={b.id} battle={b} />)}
             </div>
           </section>
@@ -160,21 +158,21 @@ export function BattleDetailMobile() {
   return (
     <div className="ax-page">
       <TopBarMobile />
-      <div style={{ overflowY: 'auto', flex: 1 }}>
-        <section style={{ padding: '24px 16px', borderBottom: '1px solid var(--color-border)' }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+      <div className={styles.pageBody}>
+        <section className={styles.mobileHero}>
+          <div className={styles.mobileBadgeRow}>
             <ResultBadge result={battle.result} />
           </div>
-          <h1 className="ax-display" style={{ fontSize: 36, margin: 0, lineHeight: 0.95, letterSpacing: '0.02em', fontWeight: 900 }}>
+          <h1 className={`ax-display ${styles.mobileTitle}`}>
             {battle.name}
           </h1>
-          <div className="ax-mono" style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 10 }}>
+          <div className={`ax-mono ${styles.mobileMeta}`}>
             {battle.dateLabel} · {battle.place}
           </div>
         </section>
 
-        <section style={{ padding: '20px 16px', borderBottom: '1px solid var(--color-border)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <section className={styles.mobileStats}>
+          <div className={styles.mobileStatsGrid}>
             {[
               ['Fuerzas', battle.forces],
               ['Bajas', battle.casualties],
@@ -182,24 +180,24 @@ export function BattleDetailMobile() {
               ['Era', battle.era],
             ].map(([l, v]) => (
               <div key={l}>
-                <div className="ax-label" style={{ fontSize: 9.5, marginBottom: 4 }}>{l}</div>
-                <div style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>{v}</div>
+                <div className={`ax-label ${styles.mobileStatLabel}`}>{l}</div>
+                <div className={styles.mobileStatValue}>{v}</div>
               </div>
             ))}
           </div>
         </section>
 
-        <section style={{ padding: '20px 16px 32px' }}>
-          <div className="ax-stamp" style={{ marginBottom: 14 }}>Bandos</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ border: '1px solid var(--color-border)', padding: 14 }}>
-              <div className="ax-label" style={{ marginBottom: 6 }}>Bando 1</div>
-              <div className="ax-display" style={{ fontSize: 16 }}>Unión Soviética</div>
+        <section className={styles.mobileFactions}>
+          <div className={`ax-stamp ${styles.mobileFactionsStamp}`}>Bandos</div>
+          <div className={styles.mobileFactionList}>
+            <div className={styles.mobileFactionCard}>
+              <div className={`ax-label ${styles.mobileFactionSide}`}>Bando 1</div>
+              <div className={`ax-display ${styles.mobileFactionName}`}>Unión Soviética</div>
               <ResultBadge result={battle.result === 'victory' ? 'victory' : 'defeat'} />
             </div>
-            <div style={{ border: '1px solid var(--color-border)', padding: 14 }}>
-              <div className="ax-label" style={{ marginBottom: 6 }}>Bando 2</div>
-              <div className="ax-display" style={{ fontSize: 16 }}>Alemania Nazi</div>
+            <div className={styles.mobileFactionCard}>
+              <div className={`ax-label ${styles.mobileFactionSide}`}>Bando 2</div>
+              <div className={`ax-display ${styles.mobileFactionName}`}>Alemania Nazi</div>
               <ResultBadge result={battle.result === 'victory' ? 'defeat' : 'victory'} />
             </div>
           </div>
@@ -211,6 +209,6 @@ export function BattleDetailMobile() {
 }
 
 export default function BattleDetail() {
-  const isMobile = window.innerWidth < 768
+  const isMobile = useIsMobile()
   return isMobile ? <BattleDetailMobile /> : <BattleDetailDesktop />
 }

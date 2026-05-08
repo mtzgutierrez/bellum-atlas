@@ -1,0 +1,196 @@
+/* ══════════════════════════════
+   SHARED MAP
+══════════════════════════════ */
+.mapWrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ══════════════════════════════
+   OVERLAYS (desktop)
+══════════════════════════════ */
+.eraBar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  background: rgba(13, 13, 13, 0.9);
+  border: 1px solid var(--color-border);
+  padding: 10px 14px;
+  backdrop-filter: blur(8px);
+}
+
+.battleCount {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(13, 13, 13, 0.88);
+  border: 1px solid var(--color-border);
+  padding: 14px 16px;
+  backdrop-filter: blur(8px);
+}
+
+.battleCountLabel {
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+}
+
+.battleCountValue {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  margin-top: 4px;
+}
+
+.battleCountSub { margin-top: 6px; }
+
+.battleCountEra {
+  font-size: 10px;
+  color: var(--color-gold-bright);
+  margin-top: 8px;
+  letter-spacing: 0.08em;
+}
+
+.hint {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(13, 13, 13, 0.88);
+  border: 1px solid var(--color-border);
+  padding: 10px 14px;
+  backdrop-filter: blur(8px);
+}
+
+.hintList {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ══════════════════════════════
+   SELECTED POPUP (desktop)
+══════════════════════════════ */
+.popup {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  background: rgba(13, 13, 13, 0.96);
+  border: 1px solid var(--color-gold);
+  padding: 16px 18px;
+  min-width: 260px;
+  backdrop-filter: blur(8px);
+}
+
+.popupClose {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 4px;
+}
+
+.popupEra {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.popupName {
+  font-size: 18px;
+  margin-top: 8px;
+  letter-spacing: 0.04em;
+}
+
+.popupWar {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.popupDate {
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+}
+
+.popupPlace {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.popupStats {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-subtle);
+  display: flex;
+  justify-content: space-between;
+}
+
+.popupStatLabel { font-size: 9px; }
+.popupStatValue { font-size: 12px; margin-top: 2px; }
+
+/* ══════════════════════════════
+   MOBILE OVERLAYS
+══════════════════════════════ */
+.mobileEraBar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  background: rgba(13, 13, 13, 0.8);
+  padding: 8px 10px;
+  backdrop-filter: blur(8px);
+}
+
+.mobileBottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(13, 13, 13, 0.92);
+  border-top: 1px solid var(--color-border);
+  padding: 12px 16px;
+  backdrop-filter: blur(10px);
+}
+
+.mobileSelected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobileSelectedEra {
+  font-size: 9.5px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.12em;
+}
+
+.mobileSelectedName {
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+.mobileSelectedMeta {
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.mobileEmptyHint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: center;
+}

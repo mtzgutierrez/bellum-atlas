@@ -1,3 +1,5 @@
+import styles from './MapPin.module.css'
+
 interface MapPinProps {
   x: number
   y: number
@@ -9,17 +11,15 @@ interface MapPinProps {
 export default function MapPin({ x, y, size = 'md', label, color = '#D4A017' }: MapPinProps) {
   const dim = size === 'sm' ? 8 : size === 'lg' ? 14 : 11
   return (
-    <div style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}>
-      <div style={{
-        width: dim, height: dim, borderRadius: '50%',
-        background: color, boxShadow: `0 0 ${dim}px ${color}88`, border: '1px solid rgba(0,0,0,0.5)',
-      }} />
+    <div className={styles.pin} style={{ left: `${x}%`, top: `${y}%` }}>
+      <div
+        className={styles.dot}
+        style={{ width: dim, height: dim, background: color, boxShadow: `0 0 ${dim}px ${color}88` }}
+      />
       {label && (
-        <div className="ax-mono" style={{
-          position: 'absolute', top: dim + 2, left: '50%', transform: 'translateX(-50%)',
-          fontSize: 9, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap',
-          textTransform: 'uppercase', letterSpacing: '0.08em',
-        }}>{label}</div>
+        <div className={`ax-mono ${styles.label}`} style={{ top: dim + 2 }}>
+          {label}
+        </div>
       )}
     </div>
   )

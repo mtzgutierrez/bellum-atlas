@@ -1,19 +1,20 @@
-import { useState } from 'react'
-import { useIsMobile } from '../hooks/useIsMobile'
-import {
-  ComposableMap,
-  Geographies,
-  Geography,
-  Marker,
-  ZoomableGroup,
-} from 'react-simple-maps'
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useRef, useEffect } from 'react'
+// @ts-expect-error
+import { feature } from 'topojson-client'
 import { TopBarDesktop } from '../components/TopBar'
 import BottomNav from '../components/BottomNav'
 import Icon from '../components/Icon'
 import { battles, eras } from '../data/mock'
 import type { Battle } from '../data/mock'
+import { useIsMobile } from '../hooks/useIsMobile'
+import styles from './MapExplorer.module.css'
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
+
+const W = 960
+const H = 480
 
 const eraKeyToBattleEras: Record<string, string[]> = {
   ancient:      ['Antigüedad'],
@@ -30,6 +31,31 @@ const eraLabels: Record<string, string> = {
   contemporary: 'Edad Contemporánea',
 }
 
+function project(lon: number, lat: number): [number, number] {
+  const x = ((lon + 180) / 360) * W
+  const r = (lat * Math.PI) / 180
+  const y = ((1 - Math.log(Math.tan(Math.PI / 4 + r / 2)) / Math.PI) / 2) * H
+  return [x, y]
+}
+
+function geomToPath(geom: any): string {
+  const ring = (coords: number[][]): string =>
+    coords
+      .map((c, i) => {
+        const [x, y] = project(c[0], c[1])
+        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
+      })
+      .join('') + 'Z'
+
+  if (geom.type === 'Polygon')      return (geom.coordinates as number[][][]).map(ring).join('')
+  if (geom.type === 'MultiPolygon') return (geom.coordinates as number[][][][]).flatMap(p => p.map(ring)).join('')
+  return ''
+}
+
+type VB = { x: number; y: number; w: number; h: number }
+
+const INITIAL_VB: VB = { x: 0, y: 20, w: W, h: H - 40 }
+
 function WorldMap({
   visible,
   selected,
@@ -39,62 +65,102 @@ function WorldMap({
   selected: Battle | null
   onSelect: (b: Battle | null) => void
 }) {
-  return (
-    <ComposableMap
-      projection="geoMercator"
-      projectionConfig={{ scale: 140, center: [10, 30] }}
-      style={{ width: '100%', height: '100%', background: '#06090a' }}
-    >
-      <ZoomableGroup zoom={1} minZoom={0.8} maxZoom={8}>
-        {/* Countries */}
-        <Geographies geography={GEO_URL}>
-          {({ geographies }) =>
-            geographies.map(geo => (
-              <Geography
-                key={geo.rsmKey}
-                geography={geo}
-                style={{
-                  default: {
-                    fill: '#0e1610',
-                    stroke: 'rgba(107,122,90,0.35)',
-                    strokeWidth: 0.4,
-                    outline: 'none',
-                  },
-                  hover: {
-                    fill: '#141f16',
-                    stroke: 'rgba(184,134,11,0.4)',
-                    strokeWidth: 0.5,
-                    outline: 'none',
-                  },
-                  pressed: { outline: 'none' },
-                }}
-              />
-            ))
-          }
-        </Geographies>
+  const svgRef   = useRef<SVGSVGElement>(null)
+  const [paths, setPaths]       = useState<string[]>([])
+  const [vb, setVb]             = useState<VB>(INITIAL_VB)
+  const vbRef    = useRef(vb)
+  const dragRef  = useRef<{ startX: number; startY: number; vb: VB } | null>(null)
+  const touchRef = useRef<{ startX: number; startY: number; vb: VB } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
-        {/* Battle markers */}
-        {visible.map(b => {
-          const isSelected = selected?.id === b.id
-          return (
-            <Marker
-              key={b.id}
-              coordinates={[b.lon, b.lat]}
-              onClick={() => onSelect(isSelected ? null : b)}
-              style={{ cursor: 'pointer' }}
-            >
-              <circle
-                r={isSelected ? 7 : 4}
-                fill={isSelected ? '#D4A017' : '#B8860B'}
-                stroke={isSelected ? 'rgba(212,160,23,0.5)' : 'rgba(0,0,0,0.6)'}
-                strokeWidth={isSelected ? 6 : 1}
-                style={{ transition: 'all 150ms ease' }}
-              />
-            </Marker>
-          )
-        })}
-      </ZoomableGroup>
-    </ComposableMap>
+  useEffect(() => { vbRef.current = vb }, [vb])
+
+  useEffect(() => {
+    fetch(GEO_URL)
+      .then(r => r.json())
+      .then(topo => {
+        const fc = feature(topo, topo.objects.countries) as any
+        setPaths((fc.features as any[]).map((f: any) => geomToPath(f.geometry)))
+      })
+  }, [])
+
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      const v    = vbRef.current
+      const rect = el.getBoundingClientRect()
+      const mx   = v.x + ((e.clientX - rect.left) / rect.width) * v.w
+      const my   = v.y + ((e.clientY - rect.top)  / rect.height) * v.h
+      const factor = e.deltaY > 0 ? 1.2 : 1 / 1.2
+      const nw   = Math.min(W * 4, Math.max(W / 8, v.w * factor))
+      const nh   = nw * (v.h / v.w)
+      setVb({ x: mx - (mx - v.x) * (nw / v.w), y: my - (my - v.y) * (nh / v.h), w: nw, h: nh })
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    dragRef.current = { startX: e.clientX, startY: e.clientY, vb: vbRef.current }
+    setIsDragging(true)
+  }
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!dragRef.current) return
+    const d    = dragRef.current
+    const rect = svgRef.current!.getBoundingClientRect()
+    const dx   = ((e.clientX - d.startX) / rect.width)  * d.vb.w
+    const dy   = ((e.clientY - d.startY) / rect.height) * d.vb.h
+    setVb({ ...d.vb, x: d.vb.x - dx, y: d.vb.y - dy })
+  }
+  const onMouseUp = () => { dragRef.current = null; setIsDragging(false) }
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1)
+      touchRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, vb: vbRef.current }
+  }
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!touchRef.current || e.touches.length !== 1) return
+    const d    = touchRef.current
+    const rect = svgRef.current!.getBoundingClientRect()
+    const dx   = ((e.touches[0].clientX - d.startX) / rect.width)  * d.vb.w
+    const dy   = ((e.touches[0].clientY - d.startY) / rect.height) * d.vb.h
+    setVb({ ...d.vb, x: d.vb.x - dx, y: d.vb.y - dy })
+  }
+  const onTouchEnd = () => { touchRef.current = null }
+
+  const zoom = W / vb.w
+
+  return (
+    <svg
+      ref={svgRef}
+      viewBox={`${vb.x.toFixed(2)} ${vb.y.toFixed(2)} ${vb.w.toFixed(2)} ${vb.h.toFixed(2)}`}
+      style={{
+        width: '100%', height: '100%', background: '#06090a',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        display: 'block', userSelect: 'none', touchAction: 'none',
+      }}
+      onMouseDown={onMouseDown} onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}     onMouseLeave={onMouseUp}
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+    >
+      {paths.map((d, i) => (
+        <path key={i} d={d} fill="#0e1610" stroke="rgba(107,122,90,0.35)" strokeWidth={0.4 / zoom} />
+      ))}
+      {visible.map(b => {
+        const [cx, cy] = project(b.lon, b.lat)
+        const isSelected = selected?.id === b.id
+        return (
+          <g key={b.id} onClick={() => onSelect(isSelected ? null : b)} style={{ cursor: 'pointer' }}>
+            {isSelected && <circle cx={cx} cy={cy} r={14 / zoom} fill="rgba(212,160,23,0.15)" />}
+            <circle cx={cx} cy={cy} r={(isSelected ? 7 : 4) / zoom}
+              fill={isSelected ? '#D4A017' : '#B8860B'}
+              stroke="rgba(0,0,0,0.6)" strokeWidth={1 / zoom} />
+          </g>
+        )
+      })}
+    </svg>
   )
 }
 
@@ -102,92 +168,61 @@ export function MapExplorerDesktop() {
   const [selected, setSelected] = useState<Battle | null>(null)
   const [eraFilter, setEraFilter] = useState<string>('all')
 
-  const visible = battles.filter(b => {
-    if (eraFilter === 'all') return true
-    return (eraKeyToBattleEras[eraFilter] ?? []).includes(b.era)
-  })
+  const visible = battles.filter(b =>
+    eraFilter === 'all' || (eraKeyToBattleEras[eraFilter] ?? []).includes(b.era)
+  )
 
   return (
     <div className="ax-page">
       <TopBarDesktop />
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+      <div className={styles.mapWrapper}>
         <WorldMap visible={visible} selected={selected} onSelect={setSelected} />
 
-        {/* Era filter bar */}
-        <div style={{
-          position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
-          display: 'flex', gap: 6,
-          background: 'rgba(13,13,13,0.9)', border: '1px solid var(--color-border)',
-          padding: '10px 14px', backdropFilter: 'blur(8px)',
-        }}>
+        <div className={styles.eraBar}>
           {['all', ...eras.map(e => e.key)].map(k => (
-            <button
-              key={k}
-              className={`ax-tag ${eraFilter === k ? 'active' : ''}`}
-              onClick={() => setEraFilter(k)}
-            >
+            <button key={k} className={`ax-tag ${eraFilter === k ? 'active' : ''}`} onClick={() => setEraFilter(k)}>
               {eraLabels[k]}
             </button>
           ))}
         </div>
 
-        {/* Battle count */}
-        <div style={{
-          position: 'absolute', top: 16, right: 16,
-          background: 'rgba(13,13,13,0.88)', border: '1px solid var(--color-border)',
-          padding: '14px 16px', backdropFilter: 'blur(8px)',
-        }}>
-          <div className="ax-mono" style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>MOSTRANDO</div>
-          <div className="ax-display" style={{ fontSize: 28, fontWeight: 900, lineHeight: 1, marginTop: 4 }}>{visible.length}</div>
-          <div className="ax-stat-label" style={{ marginTop: 6 }}>de 5.247 batallas</div>
+        <div className={styles.battleCount}>
+          <div className={`ax-mono ${styles.battleCountLabel}`}>MOSTRANDO</div>
+          <div className={`ax-display ${styles.battleCountValue}`}>{visible.length}</div>
+          <div className={`ax-stat-label ${styles.battleCountSub}`}>de 5.247 batallas</div>
           {eraFilter !== 'all' && (
-            <div className="ax-mono" style={{ fontSize: 10, color: 'var(--color-gold-bright)', marginTop: 8, letterSpacing: '0.08em' }}>
-              {eraLabels[eraFilter].toUpperCase()}
-            </div>
+            <div className={`ax-mono ${styles.battleCountEra}`}>{eraLabels[eraFilter].toUpperCase()}</div>
           )}
         </div>
 
-        {/* Zoom hint */}
-        <div style={{
-          position: 'absolute', bottom: 16, left: 16,
-          background: 'rgba(13,13,13,0.88)', border: '1px solid var(--color-border)',
-          padding: '10px 14px', backdropFilter: 'blur(8px)',
-        }}>
-          <div className="ax-mono" style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className={styles.hint}>
+          <div className={styles.hintList}>
             <span>Scroll · Zoom</span>
             <span>Arrastrar · Mover</span>
             <span>Click pin · Detalle</span>
           </div>
         </div>
 
-        {/* Selected battle popup */}
         {selected && (
-          <div style={{
-            position: 'absolute', bottom: 16, right: 16,
-            background: 'rgba(13,13,13,0.96)', border: '1px solid var(--color-gold)',
-            padding: '16px 18px', minWidth: 260, backdropFilter: 'blur(8px)',
-          }}>
-            <button
-              onClick={() => setSelected(null)}
-              style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: 4 }}
-            >
+          <div className={styles.popup}>
+            <button className={styles.popupClose} onClick={() => setSelected(null)}>
               <Icon name="x" size={12} />
             </button>
-            <div className="ax-mono" style={{ fontSize: 10, color: 'var(--color-text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            <div className={`ax-mono ${styles.popupEra}`}>
               {selected.era} · {selected.type === 'land' ? 'Terrestre' : selected.type === 'naval' ? 'Naval' : selected.type === 'air' ? 'Aéreo' : 'Asedio'}
             </div>
-            <div className="ax-display" style={{ fontSize: 18, marginTop: 8, letterSpacing: '0.04em' }}>{selected.name}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>{selected.war}</div>
-            <div className="ax-mono" style={{ fontSize: 10.5, color: 'var(--color-text-muted)', marginTop: 6 }}>{selected.dateLabel}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>{selected.place}</div>
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-border-subtle)', display: 'flex', justifyContent: 'space-between' }}>
+            <div className={`ax-display ${styles.popupName}`}>{selected.name}</div>
+            <div className={styles.popupWar}>{selected.war}</div>
+            <div className={`ax-mono ${styles.popupDate}`}>{selected.dateLabel}</div>
+            <div className={styles.popupPlace}>{selected.place}</div>
+            <div className={styles.popupStats}>
               <div>
-                <div className="ax-label" style={{ fontSize: 9 }}>Fuerzas</div>
-                <div className="ax-mono" style={{ fontSize: 12, marginTop: 2 }}>{selected.forces}</div>
+                <div className={`ax-label ${styles.popupStatLabel}`}>Fuerzas</div>
+                <div className={`ax-mono ${styles.popupStatValue}`}>{selected.forces}</div>
               </div>
               <div>
-                <div className="ax-label" style={{ fontSize: 9 }}>Bajas est.</div>
-                <div className="ax-mono" style={{ fontSize: 12, marginTop: 2 }}>{selected.casualties}</div>
+                <div className={`ax-label ${styles.popupStatLabel}`}>Bajas est.</div>
+                <div className={`ax-mono ${styles.popupStatValue}`}>{selected.casualties}</div>
               </div>
             </div>
           </div>
@@ -201,23 +236,16 @@ export function MapExplorerMobile() {
   const [selected, setSelected] = useState<Battle | null>(null)
   const [eraFilter, setEraFilter] = useState<string>('all')
 
-  const visible = battles.filter(b => {
-    if (eraFilter === 'all') return true
-    return (eraKeyToBattleEras[eraFilter] ?? []).includes(b.era)
-  })
+  const visible = battles.filter(b =>
+    eraFilter === 'all' || (eraKeyToBattleEras[eraFilter] ?? []).includes(b.era)
+  )
 
   return (
     <div className="ax-page">
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+      <div className={styles.mapWrapper}>
         <WorldMap visible={visible} selected={selected} onSelect={setSelected} />
 
-        {/* Era filter chips */}
-        <div style={{
-          position: 'absolute', top: 12, left: 12, right: 12,
-          display: 'flex', gap: 6, overflowX: 'auto',
-          background: 'rgba(13,13,13,0.8)', padding: '8px 10px',
-          backdropFilter: 'blur(8px)',
-        }}>
+        <div className={styles.mobileEraBar}>
           {['all', ...eras.map(e => e.key)].map(k => (
             <button
               key={k}
@@ -230,20 +258,15 @@ export function MapExplorerMobile() {
           ))}
         </div>
 
-        {/* Bottom panel */}
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          background: 'rgba(13,13,13,0.92)', borderTop: '1px solid var(--color-border)',
-          padding: '12px 16px', backdropFilter: 'blur(10px)',
-        }}>
+        <div className={styles.mobileBottom}>
           {selected ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className={styles.mobileSelected}>
               <div>
-                <div className="ax-mono" style={{ fontSize: 9.5, color: 'var(--color-text-muted)', letterSpacing: '0.12em' }}>
+                <div className={`ax-mono ${styles.mobileSelectedEra}`}>
                   {selected.era.toUpperCase()} · {selected.type.toUpperCase()}
                 </div>
-                <div className="ax-display" style={{ fontSize: 16, marginTop: 2 }}>{selected.name}</div>
-                <div className="ax-mono" style={{ fontSize: 10.5, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                <div className={`ax-display ${styles.mobileSelectedName}`}>{selected.name}</div>
+                <div className={`ax-mono ${styles.mobileSelectedMeta}`}>
                   {selected.dateLabel} · {selected.place}
                 </div>
               </div>
@@ -252,7 +275,7 @@ export function MapExplorerMobile() {
               </button>
             </div>
           ) : (
-            <div className="ax-mono" style={{ fontSize: 11, color: 'var(--color-text-muted)', textAlign: 'center' }}>
+            <div className={`ax-mono ${styles.mobileEmptyHint}`}>
               {visible.length} BATALLAS · Toca un pin para ver detalles
             </div>
           )}

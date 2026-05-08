@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import Logo from './Logo'
 import Icon from './Icon'
+import styles from './TopBar.module.css'
 
 const navLinks = [
   { to: '/map', label: 'Mapa' },
@@ -17,19 +18,10 @@ interface TopBarDesktopProps {
 export function TopBarDesktop({ compact = false }: TopBarDesktopProps) {
   const location = useLocation()
   return (
-    <header style={{
-      borderBottom: '1px solid var(--color-border)',
-      background: compact ? 'rgba(13,13,13,0.85)' : 'transparent',
-      backdropFilter: compact ? 'blur(8px)' : 'none',
-      padding: '14px 28px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      flexShrink: 0,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
+    <header className={`${styles.header} ${compact ? styles.compact : ''}`}>
+      <div className={styles.left}>
         <Link to="/" style={{ textDecoration: 'none' }}><Logo /></Link>
-        <nav style={{ display: 'flex', gap: 22 }}>
+        <nav className={styles.nav}>
           {navLinks.map(L => (
             <Link key={L.to} to={L.to} className={`ax-nav-link ${location.pathname.startsWith(L.to) ? 'active' : ''}`}>
               {L.label}
@@ -37,13 +29,13 @@ export function TopBarDesktop({ compact = false }: TopBarDesktopProps) {
           ))}
         </nav>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', border: '1px solid var(--color-border)', minWidth: 220, color: 'var(--color-text-muted)' }}>
+      <div className={styles.right}>
+        <div className={styles.search}>
           <Icon name="search" size={14} color="var(--color-text-muted)" />
-          <span style={{ fontSize: 12 }}>Buscar batalla, guerra, comandante…</span>
-          <span className="ax-mono" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--color-text-muted)', border: '1px solid var(--color-border)', padding: '1px 5px' }}>⌘K</span>
+          <span className={styles.searchText}>Buscar batalla, guerra, comandante…</span>
+          <span className={`ax-mono ${styles.searchKbd}`}>⌘K</span>
         </div>
-        <button className="ax-btn ax-btn-ghost" style={{ padding: '8px 14px', fontSize: 11 }}>Acceder</button>
+        <button className={`ax-btn ax-btn-ghost ${styles.signIn}`}>Acceder</button>
       </div>
     </header>
   )
@@ -51,16 +43,9 @@ export function TopBarDesktop({ compact = false }: TopBarDesktopProps) {
 
 export function TopBarMobile() {
   return (
-    <header style={{
-      borderBottom: '1px solid var(--color-border)',
-      padding: '14px 16px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      flexShrink: 0,
-    }}>
+    <header className={styles.headerMobile}>
       <Link to="/" style={{ textDecoration: 'none' }}><Logo size={16} /></Link>
-      <div style={{ display: 'flex', gap: 14, color: 'var(--color-text-secondary)' }}>
+      <div className={styles.mobileIcons}>
         <Icon name="search" size={18} />
         <Icon name="menu" size={18} />
       </div>
