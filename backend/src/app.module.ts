@@ -1,17 +1,13 @@
 import { Module } from '@nestjs/common';
-import { HealthController } from './health/health.controller';
 import { ConfigModule } from '@nestjs/config';
 import { join } from 'path';
+import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { BattleModule } from './battle/battle.module';
+import { WarModule } from './war/war.module';
+import { CommanderModule } from './commander/commander.module';
 import { ScraperModule } from './scraper/scraper.module';
-import { CommanderModule } from './commander/commander.module';
-import { CommanderModule } from './commander/commander.module';
-import { WarModule } from './war/war.module';
-import { WarModule } from './war/war.module';
-import { BattleModule } from './war/battle/battle.module';
-import { BattleModule } from './battle/battle.module';
-
+import { MediaModule } from './media/media.module';
 
 @Module({
   imports: [
@@ -24,6 +20,7 @@ import { BattleModule } from './battle/battle.module';
     WarModule,
     CommanderModule,
     ScraperModule,
+    MediaModule,
   ],
   controllers: [HealthController],
 })

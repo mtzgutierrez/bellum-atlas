@@ -33,7 +33,6 @@ erDiagram
         datetime startDate
         datetime endDate
         string   result
-        string   imageUrl
         string   wikipediaUrl
         string   eraId FK
         string   locationId FK
@@ -48,7 +47,6 @@ erDiagram
         string   dateText
         string   result
         enum     type
-        string   imageUrl
         string   wikipediaUrl
         string   eraId FK
         string   locationId FK
@@ -86,7 +84,6 @@ erDiagram
         int    birthYear
         int    deathYear
         string description
-        string imageUrl
         string wikipediaUrl
     }
 
@@ -98,6 +95,40 @@ erDiagram
     CommanderWarFaction {
         string commanderId  PK,FK
         string warFactionId PK,FK
+    }
+
+    Media {
+        string      id PK
+        string      url
+        enum        source
+        string      license
+        string      caption
+        string      altText
+        int         width
+        int         height
+        string      mimeType
+        string      wikiTitle
+    }
+
+    BattleMedia {
+        string  mediaId   PK,FK
+        string  battleId  PK,FK
+        boolean isPrimary
+        int     order
+    }
+
+    WarMedia {
+        string  mediaId   PK,FK
+        string  warId     PK,FK
+        boolean isPrimary
+        int     order
+    }
+
+    CommanderMedia {
+        string  mediaId     PK,FK
+        string  commanderId PK,FK
+        boolean isPrimary
+        int     order
     }
 
     HistoricalEra ||--o{ War            : "agrupa"
@@ -112,6 +143,12 @@ erDiagram
     Commander     ||--o{ CommanderBattleFaction : "participa"
     WarFaction    ||--o{ CommanderWarFaction    : "tiene"
     Commander     ||--o{ CommanderWarFaction    : "participa"
+    Media         ||--o{ BattleMedia    : "vinculada a"
+    Battle        ||--o{ BattleMedia    : "tiene imágenes"
+    Media         ||--o{ WarMedia       : "vinculada a"
+    War           ||--o{ WarMedia       : "tiene imágenes"
+    Media         ||--o{ CommanderMedia : "vinculada a"
+    Commander     ||--o{ CommanderMedia : "tiene imágenes"
 ```
 
 ---
@@ -150,9 +187,28 @@ Cada `BattleFaction` representa **un bando** de un enfrentamiento (máx. 2 por b
 | `casualtiesRaw` | `"40.000–45.000"` |
 | `casualtiesMin` / `casualtiesMax` | `40000` / `45000` |
 
+### Media ↔ Battle / War / Commander (muchos a muchos)
+
+Un ítem de media puede estar vinculado a múltiples entidades (una misma imagen puede aparecer en la ficha de una batalla y en la de la guerra padre). Cada entidad puede tener múltiples imágenes.
+
+Las tablas de unión (`BattleMedia`, `WarMedia`, `CommanderMedia`) añaden dos campos de control:
+
+| Campo | Descripción |
+|---|---|
+| `isPrimary` | `true` en la imagen representativa. Solo puede haber **una** primaria por entidad; la lógica del servicio lo garantiza en transacción. |
+| `order` | Posición en una galería futura (0 = primera). |
+
+Las imágenes **nunca se almacenan** en el servidor; solo se guarda la URL pública (normalmente Wikimedia Commons) y sus metadatos. Esto elimina la necesidad de un bucket propio para el caso de uso estándar.
+
 ---
 
 ## Notas de implementación
+
+### Media: por qué URL directa en lugar de storage propio
+
+Las imágenes históricas de Wikipedia/Wikimedia Commons están bajo licencias libres (CC-BY-SA, dominio público). Wikimedia actúa como CDN pública y estable con soporte nativo de thumbnails (`?width=600`). El scraper almacena la URL de Wikimedia directamente, sin necesidad de re-alojar los binarios.
+
+Si en el futuro se necesitan imágenes propias (mapas tácticos, gráficos editoriales), se puede añadir un campo `source=CUSTOM` y apuntar la URL a un bucket de Supabase Storage o Cloudflare R2, sin cambios de esquema.
 
 ### PostGIS
 Prisma no soporta nativamente el tipo `GEOMETRY` de PostGIS. La estrategia es:

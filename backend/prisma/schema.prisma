@@ -16,6 +16,12 @@ enum BattleType {
   COMBINED
 }
 
+enum MediaSource {
+  WIKIMEDIA  // Wikimedia Commons — URL directa, licencia libre
+  CUSTOM     // Subida manualmente al bucket propio
+  EXTERNAL   // URL externa de terceros (uso provisional)
+}
+
 // ─── CORE ENTITIES ────────────────────────────────────────────────────────────
 
 /// Períodos históricos. Seed fijo: Antigüedad, Edad Media, Era Moderna, Contemporánea, S. XX, S. XXI
@@ -56,7 +62,6 @@ model War {
   startDate    DateTime?
   endDate      DateTime?
   result       String?        // texto libre: "Victoria aliada", "Inconcluso"...
-  imageUrl     String?
   wikipediaUrl String?        @unique
   eraId        String?
   era          HistoricalEra? @relation(fields: [eraId], references: [id])
@@ -64,6 +69,7 @@ model War {
   location     Location?      @relation(fields: [locationId], references: [id])
   battles      BattleWar[]
   factions     WarFaction[]
+  media        WarMedia[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -79,7 +85,6 @@ model Battle {
   dateText     String?         // texto raw de Wikipedia antes de parsear
   result       String?
   type         BattleType?
-  imageUrl     String?
   wikipediaUrl String?         @unique
   eraId        String?
   era          HistoricalEra?  @relation(fields: [eraId], references: [id])
@@ -87,6 +92,7 @@ model Battle {
   location     Location?       @relation(fields: [locationId], references: [id])
   wars         BattleWar[]
   factions     BattleFaction[]
+  media        BattleMedia[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -149,10 +155,10 @@ model Commander {
   birthYear    Int?
   deathYear    Int?
   description  String?
-  imageUrl     String?
   wikipediaUrl String?                  @unique
   battles      CommanderBattleFaction[]
   wars         CommanderWarFaction[]
+  media        CommanderMedia[]
   createdAt    DateTime                 @default(now())
   updatedAt    DateTime                 @updatedAt
 
@@ -183,4 +189,68 @@ model CommanderWarFaction {
 
   @@id([commanderId, warFactionId])
   @@map("commander_war_factions")
+}
+
+// ─── MEDIA ────────────────────────────────────────────────────────────────────
+
+/// Recurso multimedia. Centraliza URLs de imágenes de Wikimedia (y futuras fuentes).
+/// Nunca almacena el binario; solo los metadatos y la URL de origen.
+model Media {
+  id         String      @id @default(cuid())
+  url        String      @unique
+  source     MediaSource @default(WIKIMEDIA)
+  license    String?     // "CC-BY-SA-4.0", "public-domain", "CC-BY-4.0"…
+  caption    String?     // pie de foto tal como aparece en Wikipedia
+  altText    String?     // texto alternativo para accesibilidad
+  width      Int?        // píxeles
+  height     Int?        // píxeles
+  mimeType   String?     // "image/jpeg", "image/webp", "image/png"
+  wikiTitle  String?     // nombre del archivo en Wikimedia Commons, ej: "Battle_of_Stalingrad.jpg"
+  battles    BattleMedia[]
+  wars       WarMedia[]
+  commanders CommanderMedia[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@map("media")
+}
+
+/// Relación muchos-a-muchos: Media ↔ Battle.
+/// isPrimary=true marca la imagen representativa de la batalla (máx. 1 por batalla).
+model BattleMedia {
+  mediaId   String
+  battleId  String
+  isPrimary Boolean @default(false)
+  order     Int     @default(0)   // orden para galerías futuras
+  media     Media   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  battle    Battle  @relation(fields: [battleId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, battleId])
+  @@map("battle_media")
+}
+
+/// Relación muchos-a-muchos: Media ↔ War.
+model WarMedia {
+  mediaId   String
+  warId     String
+  isPrimary Boolean @default(false)
+  order     Int     @default(0)
+  media     Media   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  war       War     @relation(fields: [warId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, warId])
+  @@map("war_media")
+}
+
+/// Relación muchos-a-muchos: Media ↔ Commander.
+model CommanderMedia {
+  mediaId     String
+  commanderId String
+  isPrimary   Boolean   @default(false)
+  order       Int       @default(0)
+  media       Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  commander   Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, commanderId])
+  @@map("commander_media")
 }
