@@ -7,11 +7,11 @@ import MapBackdrop from '../components/MapBackdrop'
 import MapPin from '../components/MapPin'
 import MapCluster from '../components/MapCluster'
 import { battles, eras } from '../data/mock'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 function HeroSection() {
-  const featured = battles[2] // Lepanto
   return (
-    <section style={{ position: 'relative', height: 540, borderBottom: '1px solid var(--color-border)', overflow: 'hidden' }}>
+    <section style={{ position: 'relative', height: 'clamp(340px, 50vw, 540px)', borderBottom: '1px solid var(--color-border)', overflow: 'hidden' }}>
       <div className="ax-engraving" style={{ position: 'absolute', inset: 0 }}>
         <div style={{
           position: 'absolute', inset: 0,
@@ -41,7 +41,7 @@ function HeroSection() {
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(13,13,13,0.95) 0%, rgba(13,13,13,0.75) 40%, rgba(13,13,13,0.40) 100%)' }} />
       </div>
 
-      <div style={{ position: 'absolute', inset: 0, padding: '56px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+      <div style={{ position: 'absolute', inset: 0, padding: 'clamp(24px, 4vw, 56px)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <div className="ax-stamp" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-crimson-bright)', boxShadow: '0 0 8px var(--color-crimson-bright)' }} />
@@ -51,25 +51,25 @@ function HeroSection() {
           <span className="ax-mono">07 · MAY · MMXXVI</span>
         </div>
 
-        <div style={{ maxWidth: 720 }}>
+        <div style={{ maxWidth: 'min(720px, 80%)' }}>
           <div style={{ marginBottom: 14 }}>
-            <span className="ax-mono" style={{ fontSize: 12, color: 'var(--color-text-secondary)', letterSpacing: '0.1em' }}>
+            <span className="ax-mono" style={{ fontSize: 'clamp(10px, 1.2vw, 12px)', color: 'var(--color-text-secondary)', letterSpacing: '0.1em' }}>
               1571 · NAVAL · GOLFO DE PATRAS
             </span>
           </div>
-          <h1 className="ax-display" style={{ fontSize: 96, lineHeight: 0.92, margin: 0, letterSpacing: '0.015em', fontWeight: 900 }}>
+          <h1 className="ax-display" style={{ fontSize: 'clamp(48px, 7.5vw, 96px)', lineHeight: 0.92, margin: 0, letterSpacing: '0.015em', fontWeight: 900 }}>
             Batalla de<br />
             <span style={{ color: 'var(--color-gold-bright)' }}>Lepanto</span>
           </h1>
-          <p style={{ marginTop: 22, fontSize: 16, color: 'var(--color-text-secondary)', maxWidth: 540, lineHeight: 1.55 }}>
+          <p style={{ marginTop: 'clamp(14px, 2vw, 22px)', fontSize: 'clamp(13px, 1.4vw, 16px)', color: 'var(--color-text-secondary)', maxWidth: 540, lineHeight: 1.55 }}>
             La última gran batalla naval librada únicamente con galeras de remos. Don Juan
             de Austria detiene a la flota otomana frente a las costas de Patras.
           </p>
-          <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ marginTop: 'clamp(18px, 2.5vw, 28px)', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
             <Link to="/battles/lepanto" className="ax-btn ax-btn-primary" style={{ textDecoration: 'none' }}>
               Abrir ficha completa <Icon name="arrow-right" size={14} />
             </Link>
-            <div style={{ display: 'flex', gap: 24 }}>
+            <div style={{ display: 'flex', gap: 'clamp(12px, 2vw, 24px)', flexWrap: 'wrap' }}>
               <div><div className="ax-label" style={{ fontSize: 9 }}>Liga Santa</div><div className="ax-mono" style={{ fontSize: 13 }}>212 galeras</div></div>
               <div><div className="ax-label" style={{ fontSize: 9 }}>Imp. Otomano</div><div className="ax-mono" style={{ fontSize: 13 }}>251 galeras</div></div>
               <div><div className="ax-label" style={{ fontSize: 9 }}>Bajas est.</div><div className="ax-mono" style={{ fontSize: 13 }}>~40.000</div></div>
@@ -93,7 +93,7 @@ function HeroSection() {
   )
 }
 
-function CountersStrip() {
+function CountersStrip({ isMobile }: { isMobile: boolean }) {
   const stats = [
     { v: '5.247', l: 'Batallas' },
     { v: '412', l: 'Guerras' },
@@ -101,14 +101,18 @@ function CountersStrip() {
     { v: '3.235', l: 'Años' },
   ]
   return (
-    <section style={{ padding: '64px 56px', borderBottom: '1px solid var(--color-border)', position: 'relative' }}>
-      <div className="ax-rule-gold" style={{ position: 'absolute', top: 0, left: 56, right: 56 }} />
-      <div className="ax-stamp" style={{ marginBottom: 22 }}>El archivo, en cifras</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0 }}>
+    <section style={{ padding: isMobile ? '24px 16px' : 'clamp(32px, 5vw, 64px) clamp(24px, 4vw, 56px)', borderBottom: '1px solid var(--color-border)', position: 'relative' }}>
+      {!isMobile && <div className="ax-rule-gold" style={{ position: 'absolute', top: 0, left: 'clamp(24px, 4vw, 56px)', right: 'clamp(24px, 4vw, 56px)' }} />}
+      <div className="ax-stamp" style={{ marginBottom: isMobile ? 14 : 22, fontSize: isMobile ? 9 : undefined }}>El archivo, en cifras</div>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: isMobile ? 18 : 0 }}>
         {stats.map((s, i) => (
-          <div key={i} style={{ padding: '0 32px', borderRight: i < 3 ? '1px solid var(--color-border)' : 'none' }}>
-            <div className="ax-display" style={{ fontSize: 88, fontWeight: 900, lineHeight: 1, color: 'var(--color-text-primary)' }}>{s.v}</div>
-            <div className="ax-stat-label" style={{ marginTop: 14 }}>{s.l}</div>
+          <div key={i} style={{
+            padding: isMobile ? 0 : '0 clamp(16px, 2.5vw, 32px)',
+            borderRight: !isMobile && i < 3 ? '1px solid var(--color-border)' : 'none',
+            paddingLeft: !isMobile && i === 0 ? 0 : undefined,
+          }}>
+            <div className="ax-display" style={{ fontSize: isMobile ? 36 : 'clamp(48px, 7vw, 88px)', fontWeight: 900, lineHeight: 1 }}>{s.v}</div>
+            <div className="ax-stat-label" style={{ marginTop: isMobile ? 6 : 14, fontSize: isMobile ? 9.5 : undefined }}>{s.l}</div>
           </div>
         ))}
       </div>
@@ -116,10 +120,23 @@ function CountersStrip() {
   )
 }
 
-function EntryPoints() {
+function EntryPoints({ isMobile }: { isMobile: boolean }) {
+  if (isMobile) {
+    return (
+      <section style={{ padding: '20px 16px', borderBottom: '1px solid var(--color-border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
+          <h2 className="ax-display" style={{ fontSize: 14, margin: 0, letterSpacing: '0.08em' }}>Destacadas</h2>
+          <Link to="/battles" className="ax-nav-link" style={{ fontSize: 10 }}>Todas →</Link>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[battles[1], battles[2], battles[12]].map(b => <BattleCard key={b.id} battle={b} compact />)}
+        </div>
+      </section>
+    )
+  }
   return (
-    <section style={{ padding: '48px 56px', display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 18 }}>
-      <Link to="/map" style={{ position: 'relative', minHeight: 280, border: '1px solid var(--color-border)', overflow: 'hidden', display: 'block', textDecoration: 'none' }}>
+    <section style={{ padding: 'clamp(24px, 3.5vw, 48px) clamp(24px, 4vw, 56px)', display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 18 }}>
+      <Link to="/map" style={{ position: 'relative', minHeight: 'clamp(200px, 20vw, 280px)', border: '1px solid var(--color-border)', overflow: 'hidden', display: 'block', textDecoration: 'none' }}>
         <MapBackdrop>
           <MapPin x={30} y={40} />
           <MapCluster x={55} y={50} count={42} />
@@ -130,14 +147,14 @@ function EntryPoints() {
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 50%, rgba(13,13,13,0.9))' }} />
         <div style={{ position: 'absolute', left: 24, right: 24, bottom: 22 }}>
           <div className="ax-label">Map Explorer</div>
-          <div className="ax-display" style={{ fontSize: 28, marginTop: 6 }}>El atlas completo</div>
-          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 6 }}>5.247 pines, clustering por zoom, filtros por era y resultado.</div>
+          <div className="ax-display" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', marginTop: 6 }}>El atlas completo</div>
+          <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 6 }}>5.247 pines, clustering por zoom, filtros por era.</div>
         </div>
       </Link>
-      <Link to="/battles" style={{ position: 'relative', minHeight: 280, border: '1px solid var(--color-border)', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textDecoration: 'none', color: 'inherit' }}>
+      <Link to="/battles" style={{ position: 'relative', minHeight: 'clamp(200px, 20vw, 280px)', border: '1px solid var(--color-border)', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textDecoration: 'none', color: 'inherit' }}>
         <div>
           <div className="ax-label">Catálogo</div>
-          <div className="ax-display" style={{ fontSize: 24, marginTop: 6 }}>Búsqueda full-text</div>
+          <div className="ax-display" style={{ fontSize: 'clamp(18px, 2vw, 24px)', marginTop: 6 }}>Búsqueda full-text</div>
           <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8 }}>Por nombre, comandante, lugar o guerra. Filtros combinables.</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -146,15 +163,15 @@ function EntryPoints() {
           ))}
         </div>
       </Link>
-      <Link to="/timeline" style={{ position: 'relative', minHeight: 280, border: '1px solid var(--color-border)', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textDecoration: 'none', color: 'inherit' }}>
+      <Link to="/timeline" style={{ position: 'relative', minHeight: 'clamp(200px, 20vw, 280px)', border: '1px solid var(--color-border)', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textDecoration: 'none', color: 'inherit' }}>
         <div>
           <div className="ax-label">Cronología</div>
-          <div className="ax-display" style={{ fontSize: 24, marginTop: 6 }}>32 siglos en orden</div>
+          <div className="ax-display" style={{ fontSize: 'clamp(18px, 2vw, 24px)', marginTop: 6 }}>32 siglos en orden</div>
           <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 8 }}>Feed cronológico agrupado por siglo y era histórica.</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {[['s. V a. C.', 14], ['s. XIX', 318], ['s. XX', 612]].map(([s, n]) => (
-            <div key={s} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderTop: '1px solid var(--color-border-subtle)' }}>
+            <div key={String(s)} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderTop: '1px solid var(--color-border-subtle)' }}>
               <span className="ax-mono" style={{ fontSize: 11.5, color: 'var(--color-text-secondary)' }}>{s}</span>
               <span className="ax-mono" style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>{n} entradas</span>
             </div>
@@ -165,103 +182,40 @@ function EntryPoints() {
   )
 }
 
-export function HomeDesktop() {
+function ErasList() {
   return (
-    <div className="ax-page">
-      <TopBarDesktop compact />
-      <div style={{ overflowY: 'auto', flex: 1 }}>
-        <HeroSection />
-        <CountersStrip />
-        <EntryPoints />
-      </div>
-    </div>
-  )
-}
-
-export function HomeMobile() {
-  return (
-    <div className="ax-page">
-      <TopBarMobile />
-      <div style={{ overflowY: 'auto', flex: 1 }}>
-        <section style={{ position: 'relative', minHeight: 380, borderBottom: '1px solid var(--color-border)' }}>
-          <div className="ax-engraving" style={{ position: 'absolute', inset: 0 }}>
-            <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMax slice" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-              <g fill="rgba(20,15,10,0.75)">
-                <path d="M0,300 L40,290 L80,305 L130,288 L180,302 L230,290 L290,305 L340,295 L400,302 L400,400 L0,400 Z" />
-              </g>
-              <g fill="rgba(0,0,0,0.7)">
-                {[80, 180, 290].map((x, i) => (
-                  <g key={i} transform={`translate(${x},${280 + i * 4})`}>
-                    <rect x="-3" y="-18" width="2" height="18" />
-                    <rect x="-1" y="-15" width="5" height="3" transform="rotate(-25)" />
-                  </g>
-                ))}
-              </g>
-            </svg>
+    <section style={{ padding: '20px 16px 32px' }}>
+      <h2 className="ax-display" style={{ fontSize: 14, margin: '0 0 12px', letterSpacing: '0.08em' }}>Eras</h2>
+      {eras.map((e, i) => (
+        <div key={e.key} style={{
+          padding: '12px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          borderTop: i === 0 ? '1px solid var(--color-border)' : 'none',
+          borderBottom: '1px solid var(--color-border)',
+        }}>
+          <div>
+            <div style={{ fontSize: 13 }}>{e.label}</div>
+            <div className="ax-mono" style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>{e.range}</div>
           </div>
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(13,13,13,0.85), rgba(13,13,13,0.5) 50%, rgba(13,13,13,1))' }} />
-          <div style={{ position: 'absolute', inset: 0, padding: '24px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div className="ax-stamp" style={{ fontSize: 9, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-crimson-bright)' }} />
-              Despacho del día · 07 may
-            </div>
-            <div>
-              <h1 className="ax-display" style={{ fontSize: 44, lineHeight: 0.95, margin: 0, letterSpacing: '0.02em', fontWeight: 900 }}>
-                Batalla de<br /><span style={{ color: 'var(--color-gold-bright)' }}>Lepanto</span>
-              </h1>
-              <div className="ax-mono" style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 10 }}>1571 · NAVAL · GOLFO DE PATRAS</div>
-              <Link to="/battles/lepanto" className="ax-btn ax-btn-primary" style={{ marginTop: 18, width: '100%', justifyContent: 'center', textDecoration: 'none', display: 'inline-flex' }}>
-                Abrir ficha <Icon name="arrow-right" size={14} />
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        <section style={{ padding: '24px 16px', borderBottom: '1px solid var(--color-border)' }}>
-          <div className="ax-stamp" style={{ marginBottom: 14, fontSize: 9 }}>El archivo, en cifras</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-            {[['5.247', 'Batallas'], ['412', 'Guerras'], ['193', 'Naciones'], ['3.235', 'Años']].map(([v, l]) => (
-              <div key={l}>
-                <div className="ax-display" style={{ fontSize: 36, fontWeight: 900, lineHeight: 1 }}>{v}</div>
-                <div className="ax-stat-label" style={{ fontSize: 9.5, marginTop: 6 }}>{l}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section style={{ padding: '20px 16px', borderBottom: '1px solid var(--color-border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h2 className="ax-display" style={{ fontSize: 14, margin: 0, letterSpacing: '0.08em' }}>Destacadas</h2>
-            <Link to="/battles" className="ax-nav-link" style={{ fontSize: 10 }}>Todas →</Link>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[battles[1], battles[2], battles[12]].map(b => <BattleCard key={b.id} battle={b} compact />)}
-          </div>
-        </section>
-
-        <section style={{ padding: '20px 16px 32px' }}>
-          <h2 className="ax-display" style={{ fontSize: 14, margin: '0 0 12px', letterSpacing: '0.08em' }}>Eras</h2>
-          {eras.map((e, i) => (
-            <div key={e.key} style={{
-              padding: '12px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              borderTop: i === 0 ? '1px solid var(--color-border)' : 'none',
-              borderBottom: '1px solid var(--color-border)',
-            }}>
-              <div>
-                <div style={{ fontSize: 13 }}>{e.label}</div>
-                <div className="ax-mono" style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>{e.range}</div>
-              </div>
-              <Icon name="chevron-right" size={14} color="var(--color-text-muted)" />
-            </div>
-          ))}
-        </section>
-      </div>
-      <BottomNav />
-    </div>
+          <Icon name="chevron-right" size={14} color="var(--color-text-muted)" />
+        </div>
+      ))}
+    </section>
   )
 }
 
 export default function Home() {
-  const isMobile = window.innerWidth < 768
-  return isMobile ? <HomeMobile /> : <HomeDesktop />
+  const isMobile = useIsMobile()
+
+  return (
+    <div className="ax-page">
+      {isMobile ? <TopBarMobile /> : <TopBarDesktop compact />}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        <HeroSection />
+        <CountersStrip isMobile={isMobile} />
+        <EntryPoints isMobile={isMobile} />
+        {isMobile && <ErasList />}
+      </div>
+      {isMobile && <BottomNav />}
+    </div>
+  )
 }

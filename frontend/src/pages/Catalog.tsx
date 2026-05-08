@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { TopBarDesktop, TopBarMobile } from '../components/TopBar'
 import BottomNav from '../components/BottomNav'
 import Icon from '../components/Icon'
@@ -170,6 +171,6 @@ export function CatalogMobile() {
 }
 
 export default function Catalog() {
-  const isMobile = window.innerWidth < 768
+  const isMobile = useIsMobile()
   return isMobile ? <CatalogMobile /> : <CatalogDesktop />
 }

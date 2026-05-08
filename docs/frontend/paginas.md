@@ -6,8 +6,6 @@ Cada página existe en dos variantes: `Desktop` y `Mobile`. El componente raíz 
 
 ## Home (`/`)
 
-**Variante B — Cinematográfica ("grabado a sangre")**
-
 El hero ocupa 540px de altura, fondo de grabado con soldados-silueta SVG y degradado de humo. La batalla del día (Lepanto) se muestra con tipografía Cinzel a 96px en dos líneas, con el nombre final en dorado.
 
 ```
