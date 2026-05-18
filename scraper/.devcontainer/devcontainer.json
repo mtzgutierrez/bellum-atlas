@@ -2,8 +2,7 @@
   "name": "Ares Codex App - Scraper (Scrapy)",
 
   "dockerComposeFile": [
-    "../../docker-compose.yml",
-    "../../docker-compose.dev.yml"
+    "docker-compose.devcontainer.yml"
   ],
 
   "service": "scraper",

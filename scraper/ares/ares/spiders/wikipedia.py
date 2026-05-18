@@ -12,17 +12,12 @@ class WikipediaSpider(scrapy.Spider):
         for i, tr in enumerate(trs):
             th_text = tr.css("th.section::text").get()
             if th_text and section_text.lower() in th_text.lower():
-                # El contenido está en i+2
                 if i + 2 < len(trs):
                     celdas = trs[i + 2].css("td")
                     if len(celdas) >= 2:
                         return {
-                            "side1": " | ".join(
-                                celdas[0].css("*::text").getall()
-                            ).strip(),
-                            "side2": " | ".join(
-                                celdas[1].css("*::text").getall()
-                            ).strip(),
+                            "side1": " | ".join(celdas[0].css("*::text").getall()).strip(),
+                            "side2": " | ".join(celdas[1].css("*::text").getall()).strip(),
                         }
         return None
 
@@ -34,22 +29,20 @@ class WikipediaSpider(scrapy.Spider):
             if clave and valor:
                 datos[clave] = valor
 
-        item = WikipediaItem()
-        item["title"] = response.css("h1 span.mw-page-title-main::text").get()
-        item["imageUrl"] = response.css(
-            "table.infobox a.mw-file-description img::attr(src)"
-        ).get()
-        item["date"] = datos.get("Fecha")
-        item["place"] = datos.get("Lugar")
-        item["coordinates"] = datos.get("Coordenadas")
-        item["result"] = datos.get("Resultado")
+        image_url = response.css("table.infobox a.mw-file-description img::attr(src)").get()
 
-        # Secciones de dos columnas
-        item["belligerents"] = self._extract_two_column_section(
-            response, "Beligerantes"
-        )
-        item["commanders"] = self._extract_two_column_section(response, "Comandantes")
-        item["strength"] = self._extract_two_column_section(response, "Fuerzas")
-        item["casualties"] = self._extract_two_column_section(response, "Bajas")
+        item = WikipediaItem()
+        item["type"]         = "battle"
+        item["title"]        = response.css("h1 span.mw-page-title-main::text").get()
+        item["wikipediaUrl"] = response.url
+        item["imageUrl"]     = f"https:{image_url}" if image_url and image_url.startswith("//") else image_url
+        item["dateText"]     = datos.get("Fecha")
+        item["place"]        = datos.get("Lugar")
+        item["coordinates"]  = datos.get("Coordenadas")
+        item["result"]       = datos.get("Resultado")
+        item["belligerents"] = self._extract_two_column_section(response, "Beligerantes")
+        item["commanders"]   = self._extract_two_column_section(response, "Comandantes")
+        item["strength"]     = self._extract_two_column_section(response, "Fuerzas")
+        item["casualties"]   = self._extract_two_column_section(response, "Bajas")
 
         yield item
