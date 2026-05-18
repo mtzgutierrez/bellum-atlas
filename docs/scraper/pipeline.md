@@ -2,7 +2,7 @@
 
 **Archivo**: `scraper/ares/ares/pipelines.py`
 
-El pipeline es la pieza que conecta el scraper con el backend. Cada vez que el spider extrae un `WikipediaItem`, el pipeline lo recibe, construye el payload JSON y lo envía al endpoint interno del backend.
+El pipeline conecta el scraper con el backend. Recibe cada item extraído por el spider, construye el payload JSON y lo envía al endpoint del backend que corresponde según el tipo de entidad.
 
 ---
 
@@ -10,10 +10,30 @@ El pipeline es la pieza que conecta el scraper con el backend. Cada vez que el s
 
 ```mermaid
 flowchart LR
-    SP["🕷️ Spider\nwikipedia.py"] -->|WikipediaItem| PP["⚙️ BackendPipeline\npipelines.py"]
-    PP -->|POST /internal/scraper/battle\nx-api-key| BE["🖥️ Backend API\n:3000"]
-    BE -->|upsert por wikipediaUrl| DB[("🐘 PostgreSQL")]
+    SP["🕷️ Spider"] -->|BattleItem| PP
+    SP -->|WarItem| PP
+    SP -->|CommanderItem| PP
+
+    PP["⚙️ BackendPipeline"] -->|"POST /internal/scraper/battle\nx-api-key"| BE
+    PP -->|"POST /internal/scraper/war\nx-api-key"| BE
+    PP -->|"POST /internal/scraper/commander\nx-api-key"| BE
+
+    BE["🖥️ Backend API\n:3000"] -->|upsert| DB[("🐘 PostgreSQL")]
 ```
+
+---
+
+## Routing por tipo
+
+El pipeline lee el campo `type` de cada item para decidir a qué endpoint enviarlo:
+
+| `type` | Endpoint | Clave de upsert |
+|---|---|---|
+| `"battle"` | `POST /internal/scraper/battle` | `wikipediaUrl` |
+| `"war"` | `POST /internal/scraper/war` | `wikipediaUrl` |
+| `"commander"` | `POST /internal/scraper/commander` | `wikipediaUrl` |
+
+Items con un `type` desconocido se descartan con un warning en el log.
 
 ---
 
@@ -24,7 +44,7 @@ flowchart LR
 | Método | Cuándo se ejecuta | Qué hace |
 |---|---|---|
 | `open_spider` | Al arrancar el spider | Lee `BACKEND_URL` y `SCRAPER_API_KEY` del entorno |
-| `process_item` | Por cada item extraído | Construye el payload y lo envía al backend |
+| `process_item` | Por cada item extraído | Enruta por tipo, construye payload y llama a `_send` |
 
 ### Código
 
@@ -32,59 +52,84 @@ flowchart LR
 class BackendPipeline:
 
     def open_spider(self, spider):
-        self.backend_url = os.environ.get("BACKEND_URL", "http://localhost:3000").rstrip("/")
-        self.api_key = os.environ.get("SCRAPER_API_KEY", "")
+        self.backend_url = os.environ.get('BACKEND_URL', 'http://localhost:3000').rstrip('/')
+        self.api_key = os.environ.get('SCRAPER_API_KEY', '')
 
     def process_item(self, item, spider):
         adapter = ItemAdapter(item)
-        payload = self._build_payload(adapter)
+        item_type = adapter.get('type')          # "battle" | "war" | "commander"
 
-        if not payload.get("wikipediaUrl"):
-            logger.warning("Item sin wikipediaUrl, se descarta: %s", payload.get("title"))
-            return item
-
-        self._send(payload)
+        payload = self._build_payload(item_type, adapter)
+        self._send(item_type, payload)
         return item
 ```
 
 ---
 
-## Construcción del payload (`_build_payload`)
+## Construcción del payload
 
-El pipeline mapea los campos del `WikipediaItem` al `ScraperBattleDto` que espera el backend:
+Cada tipo de item tiene su propio método de construcción. Los campos `None` se omiten del payload para no sobreescribir datos existentes en el backend con valores vacíos.
 
-| Campo en item | Campo en payload | Notas |
+### `BattleItem` → `ScraperBattleDto`
+
+| Campo item | Campo payload | Notas |
 |---|---|---|
-| `type` | `type` | Siempre `"battle"` en MVP |
+| `type` | `type` | `"battle"` |
 | `title` | `title` | Requerido |
-| `wikipediaUrl` | `wikipediaUrl` | Clave de upsert — requerido |
-| `imageUrl` | `imageUrl` | Omitido si `None` |
-| `dateText` | `dateText` | Fecha raw. El campo `date` (ISO) queda pendiente hasta la normalización |
-| `place` | `place` | Omitido si `None` |
-| `result` | `result` | Omitido si `None` |
+| `wikipediaUrl` | `wikipediaUrl` | Clave de upsert |
+| `imageUrl` | `imageUrl` | Solo si no es `None` |
+| `dateText` | `dateText` | Fecha raw. El campo `date` ISO queda para la normalización futura |
+| `place` | `place` | — |
+| `result` | `result` | — |
 | `belligerents` | `belligerents` | `{ side1, side2 }` |
 | `commanders` | `commanders` | `{ side1, side2 }` |
 | `strength` | `strength` | `{ side1, side2 }` |
 | `casualties` | `casualties` | `{ side1, side2 }` |
 
-!!! info "Campo `date` (ISO 8601)"
-    El backend acepta tanto `dateText` (texto raw) como `date` (fecha normalizada). Por ahora el pipeline solo envía `dateText`. El campo `date` se poblará cuando se implemente la normalización de fechas.
+### `WarItem` → `ScraperWarDto`
+
+| Campo item | Campo payload | Notas |
+|---|---|---|
+| `type` | `type` | `"war"` |
+| `title` | `title` | Requerido |
+| `wikipediaUrl` | `wikipediaUrl` | Clave de upsert |
+| `imageUrl` | `imageUrl` | Solo si no es `None` |
+| `dateText` | `dateText` | Rango de fechas raw, ej: `"1936–1939"` |
+| `description` | `description` | Primer párrafo del artículo |
+| `place` | `place` | — |
+| `result` | `result` | — |
+| `belligerents` | `belligerents` | `{ side1, side2 }` |
+| `commanders` | `commanders` | `{ side1, side2 }` |
+| `casualties` | `casualties` | `{ side1, side2 }` |
+
+### `CommanderItem` → `ScraperCommanderDto`
+
+| Campo item | Campo payload | Notas |
+|---|---|---|
+| `type` | `type` | `"commander"` |
+| `name` | `name` | Requerido (clave de búsqueda) |
+| `wikipediaUrl` | `wikipediaUrl` | Clave de upsert |
+| `imageUrl` | `imageUrl` | Solo si no es `None` |
+| `country` | `country` | Lealtad o país |
+| `birthYear` | `birthYear` | Entero, ej: `1892` |
+| `deathYear` | `deathYear` | Entero, ej: `1975` |
+| `description` | `description` | Primer párrafo del artículo |
 
 ---
 
 ## Envío HTTP (`_send`)
 
-Usa únicamente `urllib` de la librería estándar de Python — sin dependencias adicionales.
+Usa únicamente `urllib` de la librería estándar de Python.
 
 ```python
 req = urllib.request.Request(
-    url="http://backend:3000/internal/scraper/battle",
-    data=json.dumps(payload).encode("utf-8"),
+    url=f"{backend_url}/internal/scraper/{item_type}",
+    data=json.dumps(payload).encode('utf-8'),
     headers={
-        "Content-Type": "application/json",
-        "x-api-key": "<SCRAPER_API_KEY>",
+        'Content-Type': 'application/json',
+        'x-api-key': api_key,
     },
-    method="POST",
+    method='POST',
 )
 ```
 
@@ -92,12 +137,14 @@ req = urllib.request.Request(
 
 | Caso | Comportamiento |
 |---|---|
-| HTTP 4xx / 5xx | Log de error con el código y el body de respuesta. El scraper continúa con el siguiente item. |
+| HTTP 4xx / 5xx | Log de error con código y body. El scraper continúa. |
 | Sin conexión al backend | Log de error con la causa. El scraper continúa. |
-| Item sin `wikipediaUrl` | Se descarta con un warning antes de hacer la petición. |
+| `type` desconocido | Warning + descarte antes de hacer la petición. |
+| Sin clave de upsert | Warning + descarte antes de hacer la petición. |
 
 !!! warning "El pipeline no reintenta"
-    Si el backend devuelve un error, el item se pierde en esa ejecución. Para producción se recomienda implementar reintentos con backoff o una cola de mensajes.
+    Si el backend devuelve un error, el item se pierde en esa ejecución.
+    Para producción se recomienda implementar reintentos con backoff.
 
 ---
 
@@ -109,16 +156,12 @@ ITEM_PIPELINES = {
 }
 ```
 
-El número `300` es la prioridad (0–1000). Un valor menor ejecuta el pipeline antes.
-
 ---
 
 ## Modo dry-run (sin enviar al backend)
 
-Para depurar el spider sin modificar la BD, comenta el pipeline en `settings.py` y exporta a JSON:
-
 ```bash
-# Desactiva BackendPipeline temporalmente en settings.py, luego:
+# Comenta BackendPipeline en settings.py y ejecuta:
 cd scraper/ares
 scrapy crawl wikipedia -o output.json
 ```
@@ -127,9 +170,9 @@ scrapy crawl wikipedia -o output.json
 
 ## Logs de ejecución
 
-Con el pipeline activo verás en consola una línea por batalla procesada:
-
 ```
-INFO  Upserted 'Batalla del Ebro' → id=cm3x... slug=batalla-del-ebro
-ERROR Backend devolvió HTTP 401 para 'https://...': Unauthorized
+INFO  Upserted battle 'Batalla del Ebro' → batalla-del-ebro
+INFO  Upserted war 'Guerra Civil Española' → guerra-civil-espanola
+INFO  Upserted commander 'Francisco Franco' → cm3x...
+ERROR Backend HTTP 401 para battle https://...: Unauthorized
 ```

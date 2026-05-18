@@ -2,19 +2,21 @@
 
 **Archivo**: `scraper/ares/ares/items.py`
 
+El scraper define tres clases de item, una por tipo de entidad. El campo `type` identifica el item y el pipeline lo usa para enrutar al endpoint correcto del backend.
+
 ---
 
-## `WikipediaItem`
+## `BattleItem`
 
 ```python
-class WikipediaItem(scrapy.Item):
-    type         = scrapy.Field()  # siempre "battle" en MVP
+class BattleItem(scrapy.Item):
+    type         = scrapy.Field()  # "battle"
     title        = scrapy.Field()  # nombre extraído del <h1>
-    wikipediaUrl = scrapy.Field()  # URL canónica del artículo — clave de upsert
-    imageUrl     = scrapy.Field()  # URL absoluta de la imagen principal de la infobox
+    wikipediaUrl = scrapy.Field()  # URL canónica — clave de upsert
+    imageUrl     = scrapy.Field()  # URL absoluta de la imagen principal
     dateText     = scrapy.Field()  # fecha raw, ej: "18 de junio de 1815"
-    place        = scrapy.Field()  # lugar raw, ej: "Waterloo, Bélgica"
-    coordinates  = scrapy.Field()  # coordenadas raw, ej: "50°41′N 4°25′E"
+    place        = scrapy.Field()  # lugar raw
+    coordinates  = scrapy.Field()  # coordenadas raw DMS
     result       = scrapy.Field()  # resultado raw
     belligerents = scrapy.Field()  # { side1: str, side2: str }
     commanders   = scrapy.Field()  # { side1: str, side2: str }
@@ -22,66 +24,89 @@ class WikipediaItem(scrapy.Item):
     casualties   = scrapy.Field()  # { side1: str, side2: str }
 ```
 
+| Campo | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| `type` | `"battle"` | Sí | Discriminador de tipo. |
+| `title` | `string` | Sí | Nombre de la batalla. |
+| `wikipediaUrl` | `string` | Sí | **Clave de upsert** en el backend. |
+| `imageUrl` | `string\|None` | No | URL absoluta `https://` de la imagen de la infobox. |
+| `dateText` | `string\|None` | No | Fecha raw. Ej: `"25 de julio-16 de noviembre de 1938"`. |
+| `place` | `string\|None` | No | Lugar raw. Ej: `"Tierra Alta, Tarragona, España"`. |
+| `coordinates` | `string\|None` | No | Coordenadas raw DMS (pendiente de normalizar). |
+| `result` | `string\|None` | No | Resultado raw. |
+| `belligerents` | `{side1,side2}\|None` | No | Beligerantes por bando, separados por `\|`. |
+| `commanders` | `{side1,side2}\|None` | No | Comandantes por bando. |
+| `strength` | `{side1,side2}\|None` | No | Efectivos por bando. |
+| `casualties` | `{side1,side2}\|None` | No | Bajas por bando. |
+
 ---
 
-## Descripción de campos
+## `WarItem`
+
+```python
+class WarItem(scrapy.Item):
+    type         = scrapy.Field()  # "war"
+    title        = scrapy.Field()  # nombre extraído del <h1>
+    wikipediaUrl = scrapy.Field()  # URL canónica — clave de upsert
+    imageUrl     = scrapy.Field()  # URL absoluta de la imagen principal
+    dateText     = scrapy.Field()  # rango de fechas raw, ej: "1936–1939"
+    place        = scrapy.Field()  # lugar raw
+    coordinates  = scrapy.Field()  # coordenadas raw DMS
+    result       = scrapy.Field()  # resultado raw
+    description  = scrapy.Field()  # primer párrafo del artículo
+    belligerents = scrapy.Field()  # { side1: str, side2: str }
+    commanders   = scrapy.Field()  # { side1: str, side2: str }
+    casualties   = scrapy.Field()  # { side1: str, side2: str }
+```
 
 | Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `type` | `string` | Sí | Tipo de entidad. `"battle"` en MVP. |
-| `title` | `string` | Sí | Nombre extraído del `<h1>` del artículo. |
-| `wikipediaUrl` | `string` | Sí | URL canónica. Es la **clave de upsert** en el backend — si ya existe una batalla con esa URL, se actualiza en lugar de crear un duplicado. |
-| `imageUrl` | `string \| None` | No | URL absoluta (`https://`) de la imagen principal de la infobox. El spider normaliza las URLs relativas `//upload.wikimedia.org/…`. |
-| `dateText` | `string \| None` | No | Fecha raw tal como aparece en la infobox, ej: `"25 de julio-16 de noviembre de 1938"`. |
-| `place` | `string \| None` | No | Lugar raw, ej: `"Tierra Alta y río Ebro, Tarragona, España"`. |
-| `coordinates` | `string \| None` | No | Coordenadas raw en formato DMS, ej: `"41°09′50″N 0°28′30″E"`. Pendiente de normalización a WGS84 decimal. |
-| `result` | `string \| None` | No | Resultado raw, ej: `"Victoria decisiva sublevada"`. |
-| `belligerents` | `object \| None` | No | Bandos enfrentados. `{ side1, side2 }` con los nombres separados por `\|`. |
-| `commanders` | `object \| None` | No | Comandantes de cada bando. `{ side1, side2 }`. |
-| `strength` | `object \| None` | No | Efectivos de cada bando. `{ side1, side2 }`. |
-| `casualties` | `object \| None` | No | Bajas de cada bando. `{ side1, side2 }`. |
+| `type` | `"war"` | Sí | Discriminador de tipo. |
+| `title` | `string` | Sí | Nombre de la guerra. |
+| `wikipediaUrl` | `string` | Sí | **Clave de upsert** en el backend. |
+| `dateText` | `string\|None` | No | Rango raw. Ej: `"1936–1939"`. |
+| `description` | `string\|None` | No | Primer párrafo del artículo (máx. 500 caracteres). |
+| `belligerents` | `{side1,side2}\|None` | No | Bandos enfrentados. |
+| `commanders` | `{side1,side2}\|None` | No | Comandantes por bando. |
+| `casualties` | `{side1,side2}\|None` | No | Bajas por bando. |
+
+!!! note "Sin `strength`"
+    Las guerras no tienen campo de efectivos en el modelo de datos — ese nivel de detalle se registra en cada batalla individual.
 
 ---
 
-## Ejemplo de item completo
+## `CommanderItem`
 
-```json
-{
-  "type": "battle",
-  "title": "Batalla del Ebro",
-  "wikipediaUrl": "https://es.wikipedia.org/wiki/Batalla_del_Ebro",
-  "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Forces_of_the_Spanish_Government_Crossing_the_Ebro.jpg/330px-Forces.jpg",
-  "dateText": "25 de julio-16 de noviembre de 1938",
-  "place": "Tierra Alta y río Ebro, Tarragona, España",
-  "coordinates": "41°09′50″N 0°28′30″E",
-  "result": "Victoria inicial republicana / Victoria decisiva sublevada",
-  "belligerents": {
-    "side1": "República Española | Brigadas Internacionales",
-    "side2": "Bando sublevado | Alemania nazi | Reino de Italia"
-  },
-  "commanders": {
-    "side1": "Vicente Rojo Lluch | Juan Modesto | Enrique Líster",
-    "side2": "Francisco Franco | Fidel Dávila | Juan Yagüe"
-  },
-  "strength": {
-    "side1": "100.000-130.000 hombres | 250 piezas de artillería",
-    "side2": "98.000-185.000 hombres | 550 piezas de artillería"
-  },
-  "casualties": {
-    "side1": "46.713 bajas totales",
-    "side2": "41.500 bajas totales"
-  }
-}
+```python
+class CommanderItem(scrapy.Item):
+    type         = scrapy.Field()  # "commander"
+    name         = scrapy.Field()  # nombre completo
+    wikipediaUrl = scrapy.Field()  # URL canónica — clave de upsert
+    imageUrl     = scrapy.Field()  # URL absoluta del retrato
+    country      = scrapy.Field()  # lealtad o país principal
+    birthYear    = scrapy.Field()  # año de nacimiento (int)
+    deathYear    = scrapy.Field()  # año de fallecimiento (int)
+    description  = scrapy.Field()  # primer párrafo del artículo
 ```
+
+| Campo | Tipo | Requerido | Descripción |
+|---|---|---|---|
+| `type` | `"commander"` | Sí | Discriminador de tipo. |
+| `name` | `string` | Sí | Nombre completo extraído del `<h1>`. |
+| `wikipediaUrl` | `string` | Sí | **Clave de upsert** en el backend. |
+| `imageUrl` | `string\|None` | No | URL absoluta del retrato. |
+| `country` | `string\|None` | No | Campo "Lealtad" o "País" de la infobox. |
+| `birthYear` | `int\|None` | No | Primer año de 4 dígitos extraído del campo "Nacimiento". |
+| `deathYear` | `int\|None` | No | Primer año de 4 dígitos extraído del campo "Fallecimiento". |
+| `description` | `string\|None` | No | Primer párrafo del artículo (máx. 500 caracteres). |
 
 ---
 
 ## Normalización pendiente
 
-Los siguientes campos se envían raw al backend por ahora. En futuras iteraciones se normalizarán en el pipeline antes del envío:
-
 | Campo | Estado | Transformación pendiente |
 |---|---|---|
-| `dateText` | Raw → backend | Parsear a ISO 8601 para poblar el campo `date` |
-| `coordinates` | Raw → backend | Convertir DMS a `{ lat, lon }` WGS84 decimal |
-| `casualties` | Raw → backend | Extraer rangos numéricos `{ min, max }` |
+| `dateText` (batalla/guerra) | Raw | Parsear a ISO 8601 para poblar `date` / `startDate` + `endDate` |
+| `coordinates` | Raw DMS | Convertir a `{ lat, lon }` WGS84 decimal |
+| `casualties` | Raw texto | Extraer rangos numéricos `{ min, max }` |
+| `country` (comandante) | Raw texto | Normalizar a país canónico |

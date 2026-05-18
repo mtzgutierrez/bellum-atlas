@@ -8,86 +8,126 @@ from itemadapter import ItemAdapter
 
 logger = logging.getLogger(__name__)
 
-# Campos opcionales que se reenvían al backend tal cual si están presentes.
-_OPTIONAL_FIELDS = ["place", "result", "belligerents", "commanders", "strength", "casualties"]
+# Endpoint por tipo de entidad
+_ENDPOINTS = {
+    'battle':    '/internal/scraper/battle',
+    'war':       '/internal/scraper/war',
+    'commander': '/internal/scraper/commander',
+}
+
+# Campos opcionales compartidos entre batalla y guerra
+_SHARED_OPTIONAL = ['place', 'result', 'belligerents', 'commanders', 'casualties']
 
 
 class BackendPipeline:
-    """Envía cada WikipediaItem al endpoint POST /internal/scraper/battle del backend."""
+    """
+    Envía cada item al endpoint correspondiente del backend según su tipo:
+      battle    → POST /internal/scraper/battle
+      war       → POST /internal/scraper/war
+      commander → POST /internal/scraper/commander
+    """
 
     def open_spider(self, spider):
-        self.backend_url = os.environ.get("BACKEND_URL", "http://localhost:3000").rstrip("/")
-        self.api_key = os.environ.get("SCRAPER_API_KEY", "")
+        self.backend_url = os.environ.get('BACKEND_URL', 'http://localhost:3000').rstrip('/')
+        self.api_key = os.environ.get('SCRAPER_API_KEY', '')
         if not self.api_key:
-            logger.warning(
-                "SCRAPER_API_KEY no configurada — las peticiones al backend fallarán con 401"
-            )
+            logger.warning('SCRAPER_API_KEY no configurada — el backend rechazará las peticiones con 401')
 
     def process_item(self, item, spider):
         adapter = ItemAdapter(item)
-        payload = self._build_payload(adapter)
+        item_type = adapter.get('type')
 
-        if not payload.get("wikipediaUrl"):
-            logger.warning("Item sin wikipediaUrl, se descarta: %s", payload.get("title"))
+        if item_type not in _ENDPOINTS:
+            logger.warning("Tipo de item desconocido '%s', se descarta", item_type)
             return item
 
-        self._send(payload)
+        payload = self._build_payload(item_type, adapter)
+        upsert_key = 'name' if item_type == 'commander' else 'wikipediaUrl'
+
+        if not payload.get(upsert_key):
+            logger.warning("Item '%s' sin '%s', se descarta", item_type, upsert_key)
+            return item
+
+        self._send(item_type, payload)
         return item
 
-    # ── helpers ──────────────────────────────────────────────────────────────
+    # ── Construcción del payload ───────────────────────────────────────────────
 
-    def _build_payload(self, adapter):
+    def _build_payload(self, item_type: str, adapter) -> dict:
+        if item_type == 'battle':
+            return self._battle_payload(adapter)
+        if item_type == 'war':
+            return self._war_payload(adapter)
+        return self._commander_payload(adapter)
+
+    def _battle_payload(self, adapter) -> dict:
         payload = {
-            "type":         adapter.get("type") or "battle",
-            "title":        adapter.get("title") or "",
-            "wikipediaUrl": adapter.get("wikipediaUrl") or "",
+            'type':         'battle',
+            'title':        adapter.get('title') or '',
+            'wikipediaUrl': adapter.get('wikipediaUrl') or '',
         }
-
-        if adapter.get("imageUrl"):
-            payload["imageUrl"] = adapter["imageUrl"]
-
-        # El backend distingue dateText (raw) de date (ISO). Solo enviamos el raw
-        # hasta que se implemente la normalización de fechas en el pipeline.
-        if adapter.get("dateText"):
-            payload["dateText"] = adapter["dateText"]
-
-        for field in _OPTIONAL_FIELDS:
-            value = adapter.get(field)
-            if value:
-                payload[field] = value
-
+        if adapter.get('imageUrl'):
+            payload['imageUrl'] = adapter['imageUrl']
+        if adapter.get('dateText'):
+            payload['dateText'] = adapter['dateText']
+        if adapter.get('strength'):
+            payload['strength'] = adapter['strength']
+        for field in _SHARED_OPTIONAL:
+            if adapter.get(field):
+                payload[field] = adapter[field]
         return payload
 
-    def _send(self, payload):
-        url = f"{self.backend_url}/internal/scraper/battle"
-        data = json.dumps(payload).encode("utf-8")
+    def _war_payload(self, adapter) -> dict:
+        payload = {
+            'type':         'war',
+            'title':        adapter.get('title') or '',
+            'wikipediaUrl': adapter.get('wikipediaUrl') or '',
+        }
+        if adapter.get('imageUrl'):
+            payload['imageUrl'] = adapter['imageUrl']
+        if adapter.get('dateText'):
+            payload['dateText'] = adapter['dateText']
+        if adapter.get('description'):
+            payload['description'] = adapter['description']
+        for field in _SHARED_OPTIONAL:
+            if adapter.get(field):
+                payload[field] = adapter[field]
+        return payload
+
+    def _commander_payload(self, adapter) -> dict:
+        payload = {
+            'type':         'commander',
+            'name':         adapter.get('name') or '',
+            'wikipediaUrl': adapter.get('wikipediaUrl') or '',
+        }
+        for field in ['imageUrl', 'country', 'birthYear', 'deathYear', 'description']:
+            if adapter.get(field) is not None:
+                payload[field] = adapter[field]
+        return payload
+
+    # ── Envío HTTP ────────────────────────────────────────────────────────────
+
+    def _send(self, item_type: str, payload: dict):
+        url = self.backend_url + _ENDPOINTS[item_type]
+        data = json.dumps(payload).encode('utf-8')
         req = urllib.request.Request(
             url,
             data=data,
             headers={
-                "Content-Type": "application/json",
-                "x-api-key": self.api_key,
+                'Content-Type': 'application/json',
+                'x-api-key': self.api_key,
             },
-            method="POST",
+            method='POST',
         )
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 body = json.loads(resp.read())
-                logger.info(
-                    "Upserted '%s' → id=%s slug=%s",
-                    payload["title"],
-                    body.get("id"),
-                    body.get("slug"),
-                )
+                identifier = body.get('slug') or body.get('id', '?')
+                logger.info("Upserted %s '%s' → %s", item_type, payload.get('title') or payload.get('name'), identifier)
         except urllib.error.HTTPError as e:
-            body = e.read().decode(errors="replace")
-            logger.error(
-                "Backend devolvió HTTP %s para '%s': %s",
-                e.code,
-                payload.get("wikipediaUrl"),
-                body,
-            )
+            body = e.read().decode(errors='replace')
+            logger.error('Backend HTTP %s para %s %s: %s', e.code, item_type, payload.get('wikipediaUrl') or payload.get('name'), body)
         except urllib.error.URLError as e:
-            logger.error("No se pudo conectar al backend (%s): %s", url, e.reason)
+            logger.error('No se pudo conectar al backend (%s): %s', url, e.reason)
         except Exception as e:
-            logger.error("Error inesperado enviando al backend: %s", e)
+            logger.error('Error inesperado enviando %s al backend: %s', item_type, e)
