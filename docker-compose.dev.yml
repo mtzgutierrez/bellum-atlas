@@ -48,6 +48,21 @@ services:
     environment:
       ENV: development
 
+  # ─── Docs ────────────────────────────────────────────────
+  docs:
+    image: python:3.13-slim
+    container_name: ares_codex_app_docs
+    working_dir: /docs
+    volumes:
+      - .:/docs
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "pip install --quiet mkdocs-material mkdocs-material[recommended] &&
+             mkdocs serve --dev-addr=0.0.0.0:8000"
+    networks:
+      - app-network
+
   # ─── SonarQube ───────────────────────────────────────────
   sonar-db:
     profiles:
