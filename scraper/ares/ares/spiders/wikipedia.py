@@ -1,9 +1,21 @@
+"""
+Spider de Wikipedia para batallas, guerras y comandantes históricos.
+
+Modos de operación:
+  1. URL directa de artículo → parsea el artículo inmediatamente.
+  2. URL de categoría        → navega todos los artículos y subcategorías
+                               hasta MAX_SUBCATEGORY_DEPTH niveles.
+
+El tipo de entidad (battle / war / commander) se determina por la lista
+de start_urls en la que aparece la URL, no por el contenido de la página.
+"""
+
 import re
 import scrapy
 from ares.items import BattleItem, WarItem, CommanderItem
 
 # ── Claves de infobox por idioma ──────────────────────────────────────────────
-# Español
+
 _ES = {
     'date':         ['Fecha'],
     'place':        ['Lugar'],
@@ -13,13 +25,11 @@ _ES = {
     'commanders':   ['Comandantes'],
     'strength':     ['Fuerzas en combate', 'Fuerzas'],
     'casualties':   ['Bajas', 'Víctimas'],
-    # Commander
     'birth':        ['Nacimiento', 'Fecha de nacimiento'],
     'death':        ['Fallecimiento', 'Fecha de fallecimiento'],
     'allegiance':   ['Lealtad', 'País'],
 }
 
-# Inglés
 _EN = {
     'date':         ['Date'],
     'place':        ['Location', 'Place'],
@@ -29,26 +39,47 @@ _EN = {
     'commanders':   ['Commanders', 'Leaders'],
     'strength':     ['Strength', 'Forces'],
     'casualties':   ['Casualties', 'Losses'],
-    # Commander
     'birth':        ['Born', 'Birth date'],
     'death':        ['Died', 'Death date'],
     'allegiance':   ['Allegiance', 'Country'],
 }
 
+# Profundidad máxima de recursión en subcategorías
+MAX_SUBCATEGORY_DEPTH = 2
+
+# Prefijos de namespace de Wikipedia que NO son artículos
+_SKIP_PREFIXES = (
+    'Wikipedia:', 'Ayuda:', 'Help:', 'Portal:', 'Especial:', 'Special:',
+    'Usuario:', 'User:', 'Discusión:', 'Talk:', 'Archivo:', 'File:',
+    'MediaWiki:', 'Plantilla:', 'Template:', 'Módulo:', 'Module:',
+)
+
 
 def _abs_url(url: str | None) -> str | None:
-    """Convierte URLs relativas de Wikimedia a absolutas."""
     if url and url.startswith('//'):
         return f'https:{url}'
     return url
 
 
 def _extract_year(text: str | None) -> int | None:
-    """Extrae el primer año de 4 dígitos que encuentre en el texto."""
     if not text:
         return None
-    match = re.search(r'\b(1[0-9]{3}|20[0-9]{2})\b', text)
-    return int(match.group()) if match else None
+    m = re.search(r'\b(1[0-9]{3}|20[0-9]{2})\b', text)
+    return int(m.group()) if m else None
+
+
+def _is_category_url(url: str) -> bool:
+    return bool(re.search(r'/(?:Categor[ií]a|Category):', url, re.IGNORECASE)
+                or '/Categor%C3%ADa:' in url
+                or '/Categor%C3%A9a:' in url)
+
+
+def _is_article_url(path: str) -> bool:
+    """Devuelve True si el path de Wikipedia es un artículo válido."""
+    if not path.startswith('/wiki/'):
+        return False
+    title = path[len('/wiki/'):]
+    return not any(title.startswith(p) for p in _SKIP_PREFIXES)
 
 
 class WikipediaSpider(scrapy.Spider):
@@ -56,34 +87,90 @@ class WikipediaSpider(scrapy.Spider):
     allowed_domains = ['es.wikipedia.org', 'en.wikipedia.org']
 
     # ── Puntos de entrada ─────────────────────────────────────────────────────
+    # Pueden ser URLs de artículo o de categoría.
+    # Las categorías se rastrean recursivamente (hasta MAX_SUBCATEGORY_DEPTH).
 
-    # Batallas
     battle_start_urls = [
-        'https://es.wikipedia.org/wiki/Batalla_del_Ebro',
+        # Categorías españolas
+        'https://es.wikipedia.org/wiki/Categor%C3%ADa:Batallas',
+        # Categorías inglesas
+        'https://en.wikipedia.org/wiki/Category:Battles_by_century',
+        'https://en.wikipedia.org/wiki/Category:Naval_battles',
     ]
 
-    # Guerras
     war_start_urls = [
-        'https://es.wikipedia.org/wiki/Guerra_Civil_Espa%C3%B1ola',
+        'https://es.wikipedia.org/wiki/Categor%C3%ADa:Conflictos_armados',
+        'https://en.wikipedia.org/wiki/Category:Wars_by_century',
     ]
 
-    # Comandantes
     commander_start_urls = [
-        'https://es.wikipedia.org/wiki/Francisco_Franco',
+        'https://es.wikipedia.org/wiki/Categor%C3%ADa:Militares_de_Espa%C3%B1a',
+        'https://en.wikipedia.org/wiki/Category:Military_commanders',
     ]
+
+    # ── Bootstrap ─────────────────────────────────────────────────────────────
 
     def start_requests(self):
-        for url in self.battle_start_urls:
-            yield scrapy.Request(url, callback=self.parse_battle)
-        for url in self.war_start_urls:
-            yield scrapy.Request(url, callback=self.parse_war)
-        for url in self.commander_start_urls:
-            yield scrapy.Request(url, callback=self.parse_commander)
+        entries = [
+            (self.battle_start_urls,    self.parse_battle),
+            (self.war_start_urls,       self.parse_war),
+            (self.commander_start_urls, self.parse_commander),
+        ]
+        for urls, item_cb in entries:
+            for url in urls:
+                if _is_category_url(url):
+                    yield scrapy.Request(
+                        url,
+                        callback=self.parse_category,
+                        meta={'item_callback': item_cb, 'depth': 0},
+                    )
+                else:
+                    yield scrapy.Request(url, callback=item_cb)
+
+    # ── Rastreo de categorías ─────────────────────────────────────────────────
+
+    def parse_category(self, response):
+        """
+        Navega una página de categoría de Wikipedia:
+          - Sigue todos los artículos listados en #mw-pages.
+          - Sigue subcategorías en #mw-subcategories hasta MAX_SUBCATEGORY_DEPTH.
+          - Sigue la paginación ("página siguiente" / "next page").
+        """
+        item_callback = response.meta['item_callback']
+        depth = response.meta.get('depth', 0)
+
+        # 1. Artículos de la categoría
+        for href in response.css('#mw-pages .mw-category a::attr(href)').getall():
+            if _is_article_url(href):
+                yield response.follow(href, callback=item_callback)
+
+        # 2. Subcategorías (recursión limitada)
+        if depth < MAX_SUBCATEGORY_DEPTH:
+            for href in response.css('#mw-subcategories .mw-category a::attr(href)').getall():
+                if _is_category_url(response.urljoin(href)):
+                    yield response.follow(
+                        href,
+                        callback=self.parse_category,
+                        meta={'item_callback': item_callback, 'depth': depth + 1},
+                    )
+
+        # 3. Paginación de la categoría
+        for a in response.css('#mw-pages a'):
+            text = (a.css('::text').get() or '').strip().lower()
+            if 'siguiente' in text or 'next' in text:
+                yield response.follow(
+                    a.attrib['href'],
+                    callback=self.parse_category,
+                    meta={'item_callback': item_callback, 'depth': depth},
+                )
+                break
 
     # ── Helpers comunes ───────────────────────────────────────────────────────
 
+    def _lang_keys(self, response) -> dict:
+        return _EN if 'en.wikipedia.org' in response.url else _ES
+
     def _infobox_data(self, response) -> dict:
-        """Extrae pares clave→valor de la infobox como texto plano."""
         data = {}
         for row in response.css('table.infobox tbody tr'):
             key = ' '.join(row.css('th *::text, th::text').getall()).strip()
@@ -93,14 +180,12 @@ class WikipediaSpider(scrapy.Spider):
         return data
 
     def _get(self, data: dict, keys: list[str]) -> str | None:
-        """Devuelve el primer valor encontrado para cualquiera de las claves."""
         for k in keys:
             if k in data:
                 return data[k]
         return None
 
     def _two_columns(self, response, section_keys: list[str]) -> dict | None:
-        """Extrae una sección de dos columnas (bando1 / bando2) de la infobox."""
         trs = response.css('table.infobox tr')
         for i, tr in enumerate(trs):
             th = tr.css('th.section::text').get()
@@ -120,18 +205,13 @@ class WikipediaSpider(scrapy.Spider):
         )
 
     def _first_paragraph(self, response) -> str | None:
-        """Extrae el primer párrafo del cuerpo del artículo como descripción."""
         for p in response.css('#mw-content-text .mw-parser-output > p'):
             text = ' '.join(p.css('*::text').getall()).strip()
             if len(text) > 80:
                 return text[:500]
         return None
 
-    def _lang_keys(self, response) -> dict:
-        """Devuelve el mapa de claves según el dominio."""
-        return _EN if 'en.wikipedia.org' in response.url else _ES
-
-    # ── Parsers ───────────────────────────────────────────────────────────────
+    # ── Parsers de entidad ────────────────────────────────────────────────────
 
     def parse_battle(self, response):
         k = self._lang_keys(response)
@@ -152,7 +232,7 @@ class WikipediaSpider(scrapy.Spider):
         item['casualties']   = self._two_columns(response, k['casualties'])
         yield item
 
-    # Alias para compatibilidad con el spider original
+    # Alias para compatibilidad con el comando `scrapy crawl wikipedia`
     parse = parse_battle
 
     def parse_war(self, response):
@@ -178,16 +258,13 @@ class WikipediaSpider(scrapy.Spider):
         k = self._lang_keys(response)
         data = self._infobox_data(response)
 
-        birth_text = self._get(data, k['birth'])
-        death_text = self._get(data, k['death'])
-
         item = CommanderItem()
         item['type']         = 'commander'
         item['name']         = response.css('h1 span.mw-page-title-main::text').get()
         item['wikipediaUrl'] = response.url
         item['imageUrl']     = self._image(response)
         item['country']      = self._get(data, k['allegiance'])
-        item['birthYear']    = _extract_year(birth_text)
-        item['deathYear']    = _extract_year(death_text)
+        item['birthYear']    = _extract_year(self._get(data, k['birth']))
+        item['deathYear']    = _extract_year(self._get(data, k['death']))
         item['description']  = self._first_paragraph(response)
         yield item

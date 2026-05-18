@@ -1,6 +1,6 @@
 # Scraper — Visión general
 
-El scraper es un servicio Python independiente basado en **Scrapy 2.15** que extrae datos de batallas históricas de Wikipedia y los envía a la API del backend.
+El scraper es un servicio Python independiente basado en **Scrapy 2.15** que extrae datos de batallas, guerras y comandantes históricos de Wikipedia y los envía a la API del backend.
 
 ---
 
@@ -13,12 +13,13 @@ scraper/
 └── ares/
     ├── scrapy.cfg
     └── ares/
-        ├── settings.py        # Configuración de Scrapy y pipeline
-        ├── items.py           # Definición del WikipediaItem
-        ├── pipelines.py       # BackendPipeline: envía items al backend
+        ├── settings.py        # Configuración de Scrapy, throttling y pipeline
+        ├── items.py           # BattleItem, WarItem, CommanderItem
+        ├── pipelines.py       # BackendPipeline: normaliza y envía items al backend
+        ├── normalizers.py     # Normalización de fechas, coordenadas y bajas
         ├── middlewares.py     # Middlewares custom
         └── spiders/
-            └── wikipedia.py   # Spider: parsea infoboxes de Wikipedia
+            └── wikipedia.py   # Spider: navega categorías y parsea infoboxes
 ```
 
 ---
@@ -27,17 +28,19 @@ scraper/
 
 ```mermaid
 flowchart TD
-    A["📄 URL de Wikipedia\nej: /wiki/Batalla_del_Ebro"] --> B["🕷️ Spider\nparse infobox"]
-    B --> C["📦 WikipediaItem\ntitle, wikipediaUrl, dateText, place…"]
-    C --> D["⚙️ BackendPipeline\nconstruye payload JSON"]
-    D -->|"POST /internal/scraper/battle\nx-api-key"| E["🖥️ Backend API"]
-    E -->|upsert por wikipediaUrl| F[("🐘 PostgreSQL")]
+    A["🗂️ Categoría de Wikipedia\nej: Category:Battles_by_century"] --> B["🕷️ Spider\nparse_category → recursión"]
+    B --> C["📄 Artículo\nparsea infobox"]
+    C --> D["📦 BattleItem / WarItem / CommanderItem\ntitle, dateText, place, belligerents…"]
+    D --> E["⚙️ BackendPipeline\nnormaliza + construye payload JSON"]
+    E -->|"POST /internal/scraper/{type}\nx-api-key"| F["🖥️ Backend API"]
+    F -->|upsert por wikipediaUrl| G[("🐘 PostgreSQL")]
 ```
 
-1. **Spider**: extrae los campos de la infobox de cada artículo de Wikipedia
-2. **Item**: encapsula los datos extraídos en un `WikipediaItem`
-3. **Pipeline**: recibe el item, construye el payload y lo envía al backend via HTTP
-4. **Backend**: valida, desduplicita por `wikipediaUrl` y persiste en PostgreSQL
+1. **Spider**: navega categorías de Wikipedia recursivamente (hasta 2 niveles de subcategorías)
+2. **Parseo**: extrae campos de la infobox de cada artículo en español o inglés
+3. **Item**: encapsula los datos crudos en `BattleItem`, `WarItem` o `CommanderItem`
+4. **Pipeline**: normaliza fechas, coordenadas y bajas, luego envía al backend via HTTP
+5. **Backend**: valida, desduplicita por `wikipediaUrl` y persiste en PostgreSQL
 
 !!! warning "El scraper nunca escribe directamente en PostgreSQL"
     Toda inserción pasa por la API del backend para mantener las validaciones centralizadas.
@@ -64,6 +67,13 @@ pip install -r ../requirements.txt
 scrapy crawl wikipedia -o output.json
 ```
 
+### Limitar el crawl durante desarrollo
+
+```bash
+# Solo 50 páginas (útil para probar sin esperar horas)
+SCRAPY_HTTPCACHE=1 scrapy crawl wikipedia -s CLOSESPIDER_PAGECOUNT=50
+```
+
 ### Variables de entorno necesarias
 
 ```bash
@@ -75,7 +85,8 @@ SCRAPER_API_KEY=tu-clave-secreta
 
 ## Secciones
 
-- [Spider de Wikipedia](spider.md) — Lógica de parsing de infoboxes
-- [Items y campos](items.md) — Estructura del `WikipediaItem` y campos
-- [Pipeline](pipeline.md) — `BackendPipeline`: cómo los items llegan al backend
-- [Configuración](configuracion.md) — Throttling, concurrencia y variables de entorno
+- [Spider de Wikipedia](spider.md) — Rastreo de categorías y parsing de infoboxes
+- [Items y campos](items.md) — `BattleItem`, `WarItem`, `CommanderItem`
+- [Pipeline](pipeline.md) — `BackendPipeline`: normalización y envío al backend
+- [Normalización](normalizacion.md) — Fechas ISO, coordenadas WGS84, rango de bajas
+- [Configuración](configuracion.md) — Throttling, AutoThrottle, caché HTTP y variables de entorno

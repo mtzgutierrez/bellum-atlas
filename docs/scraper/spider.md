@@ -2,7 +2,20 @@
 
 **Archivo**: `scraper/ares/ares/spiders/wikipedia.py`
 
-El spider `wikipedia` extrae datos de artículos de batallas, guerras y comandantes de Wikipedia. Tiene un método de parseo especializado para cada tipo de entidad.
+El spider `wikipedia` extrae datos de batallas, guerras y comandantes históricos navegando categorías de Wikipedia de forma recursiva. Soporta artículos en español e inglés.
+
+---
+
+## Modo de operación
+
+El spider tiene dos modos según el tipo de URL de entrada:
+
+| Tipo de URL | Comportamiento |
+|---|---|
+| URL de artículo (`/wiki/Batalla_del_Ebro`) | Parsea el artículo directamente |
+| URL de categoría (`/wiki/Categoría:Batallas`) | Navega todos los artículos y subcategorías recursivamente |
+
+El tipo de entidad (`battle` / `war` / `commander`) lo determina la lista en la que aparece la URL, **no** el contenido de la página.
 
 ---
 
@@ -10,51 +23,98 @@ El spider `wikipedia` extrae datos de artículos de batallas, guerras y comandan
 
 ```python
 battle_start_urls = [
-    'https://es.wikipedia.org/wiki/Batalla_del_Ebro',
+    # Categorías españolas
+    'https://es.wikipedia.org/wiki/Categor%C3%ADa:Batallas',
+    # Categorías inglesas
+    'https://en.wikipedia.org/wiki/Category:Battles_by_century',
+    'https://en.wikipedia.org/wiki/Category:Naval_battles',
 ]
 
 war_start_urls = [
-    'https://es.wikipedia.org/wiki/Guerra_Civil_Espa%C3%B1ola',
+    'https://es.wikipedia.org/wiki/Categor%C3%ADa:Conflictos_armados',
+    'https://en.wikipedia.org/wiki/Category:Wars_by_century',
 ]
 
 commander_start_urls = [
-    'https://es.wikipedia.org/wiki/Francisco_Franco',
+    'https://es.wikipedia.org/wiki/Categor%C3%ADa:Militares_de_Espa%C3%B1a',
+    'https://en.wikipedia.org/wiki/Category:Military_commanders',
 ]
 ```
 
-Cada lista usa el callback correspondiente (`parse_battle`, `parse_war`, `parse_commander`), por lo que el spider puede mezclar los tres tipos en el mismo crawl.
+`start_requests()` detecta automáticamente si cada URL es una categoría o un artículo y la enruta al callback correspondiente.
+
+---
+
+## Rastreo de categorías
+
+### `parse_category(response)`
+
+Navega una página de categoría de Wikipedia siguiendo tres patrones:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Categoría:Batallas                                     │
+│                                                         │
+│  Subcategorías                          ← #mw-subcategories
+│  ├── Batallas del siglo XVIII                           │
+│  ├── Batallas de la Segunda Guerra Mundial              │
+│  └── Batallas navales                                   │
+│                                                         │
+│  Artículos                              ← #mw-pages    │
+│  ├── Batalla de Lepanto                                 │
+│  ├── Batalla de Trafalgar                               │
+│  └── ...                                               │
+│                                                         │
+│  [página siguiente]                     ← paginación   │
+└─────────────────────────────────────────────────────────┘
+```
+
+1. **Artículos** — Sigue todos los enlaces en `#mw-pages .mw-category a`, filtrando namespaces no-artículo.
+2. **Subcategorías** — Sigue `#mw-subcategories .mw-category a` hasta `MAX_SUBCATEGORY_DEPTH = 2` niveles.
+3. **Paginación** — Sigue el enlace "página siguiente" / "next page" del bloque `#mw-pages`.
+
+El `item_callback` (qué parser usar) y la profundidad actual se propagan a través del dict `meta` de Scrapy:
+
+```python
+yield response.follow(
+    href,
+    callback=self.parse_category,
+    meta={'item_callback': item_callback, 'depth': depth + 1},
+)
+```
+
+### Filtrado de namespaces
+
+Para evitar seguir páginas de administración de Wikipedia:
+
+```python
+_SKIP_PREFIXES = (
+    'Wikipedia:', 'Ayuda:', 'Help:', 'Portal:', 'Especial:', 'Special:',
+    'Usuario:', 'User:', 'Discusión:', 'Talk:', 'Archivo:', 'File:',
+    'MediaWiki:', 'Plantilla:', 'Template:', 'Módulo:', 'Module:',
+)
+```
+
+`_is_article_url(path)` devuelve `True` solo si el path comienza con `/wiki/` y el título no empieza por ninguno de estos prefijos.
 
 ---
 
 ## Soporte bilingüe (ES / EN)
 
-El spider detecta el idioma por dominio y usa el mapa de claves correcto para la infobox:
+El spider detecta el idioma por dominio y usa el mapa de claves correcto para extraer campos de la infobox:
 
-```python
-_ES = {
-    'date':         ['Fecha'],
-    'place':        ['Lugar'],
-    'result':       ['Resultado'],
-    'belligerents': ['Beligerantes'],
-    'commanders':   ['Comandantes'],
-    'birth':        ['Nacimiento', 'Fecha de nacimiento'],
-    'death':        ['Fallecimiento', 'Fecha de fallecimiento'],
-    'allegiance':   ['Lealtad', 'País'],
-    ...
-}
-
-_EN = {
-    'date':         ['Date'],
-    'place':        ['Location', 'Place'],
-    'result':       ['Result', 'Outcome'],
-    'belligerents': ['Belligerents', 'Combatants'],
-    'commanders':   ['Commanders', 'Leaders'],
-    'birth':        ['Born', 'Birth date'],
-    'death':        ['Died', 'Death date'],
-    'allegiance':   ['Allegiance', 'Country'],
-    ...
-}
-```
+| Campo lógico | Clave ES | Clave EN |
+|---|---|---|
+| `date` | `Fecha` | `Date` |
+| `place` | `Lugar` | `Location`, `Place` |
+| `result` | `Resultado` | `Result`, `Outcome` |
+| `belligerents` | `Beligerantes` | `Belligerents`, `Combatants` |
+| `commanders` | `Comandantes` | `Commanders`, `Leaders` |
+| `strength` | `Fuerzas en combate`, `Fuerzas` | `Strength`, `Forces` |
+| `casualties` | `Bajas`, `Víctimas` | `Casualties`, `Losses` |
+| `birth` | `Nacimiento`, `Fecha de nacimiento` | `Born`, `Birth date` |
+| `death` | `Fallecimiento`, `Fecha de fallecimiento` | `Died`, `Death date` |
+| `allegiance` | `Lealtad`, `País` | `Allegiance`, `Country` |
 
 ---
 
@@ -62,15 +122,15 @@ _EN = {
 
 ### `parse_battle(response)` → `BattleItem`
 
-Extrae los campos de una infobox de batalla:
-
 ```python
 item['type']         = 'battle'
 item['title']        = response.css('h1 span.mw-page-title-main::text').get()
 item['wikipediaUrl'] = response.url
-item['imageUrl']     = self._image(response)          # normalizada a https://
+item['imageUrl']     = self._image(response)
 item['dateText']     = self._get(data, k['date'])
 item['place']        = self._get(data, k['place'])
+item['coordinates']  = self._get(data, k['coordinates'])
+item['result']       = self._get(data, k['result'])
 item['belligerents'] = self._two_columns(response, k['belligerents'])
 item['commanders']   = self._two_columns(response, k['commanders'])
 item['strength']     = self._two_columns(response, k['strength'])
@@ -79,24 +139,22 @@ item['casualties']   = self._two_columns(response, k['casualties'])
 
 ### `parse_war(response)` → `WarItem`
 
-Similar a `parse_battle` pero sin `strength` y añade `description` (primer párrafo del artículo):
+Igual que `parse_battle` pero sin `strength` y añade `description` (primer párrafo del artículo):
 
 ```python
 item['type']        = 'war'
 item['description'] = self._first_paragraph(response)
-# El resto igual que parse_battle (sin strength)
+# El resto igual que parse_battle, sin strength
 ```
 
 ### `parse_commander(response)` → `CommanderItem`
 
-Extrae el perfil del comandante desde la infobox de persona:
-
 ```python
 item['type']      = 'commander'
 item['name']      = response.css('h1 span.mw-page-title-main::text').get()
-item['country']   = self._get(data, k['allegiance'])   # "Lealtad" en ES
-item['birthYear'] = _extract_year(self._get(data, k['birth']))   # 1892
-item['deathYear'] = _extract_year(self._get(data, k['death']))   # 1975
+item['country']   = self._get(data, k['allegiance'])
+item['birthYear'] = _extract_year(self._get(data, k['birth']))
+item['deathYear'] = _extract_year(self._get(data, k['death']))
 item['description'] = self._first_paragraph(response)
 ```
 
@@ -106,56 +164,56 @@ item['description'] = self._first_paragraph(response)
 
 ### `_two_columns(response, section_keys)` → `{side1, side2} | None`
 
-Las infoboxes tienen secciones de dos columnas para beligerantes y comandantes:
+Las infoboxes de batallas y guerras tienen secciones de dos columnas para beligerantes y comandantes:
 
 ```
 ┌─────────────────────────────────────────┐
 │             Beligerantes                │  ← th.section
 ├──────────────────────┬──────────────────┤
-│  República Española  │  Bando sublevado │  ← td td (i+2)
+│  República Española  │  Bando sublevado │  ← td td (fila i+2)
 └──────────────────────┴──────────────────┘
 ```
 
 Acepta una lista de claves para buscar la sección en cualquier idioma.
 
+### `_infobox_data(response)` → `dict`
+
+Itera todas las filas `<tr>` de `table.infobox` y construye un dict `{th_text: td_text}`. Esto cubre las filas simples de clave-valor.
+
 ### `_first_paragraph(response)` → `str | None`
 
-Extrae el primer párrafo del cuerpo del artículo con más de 80 caracteres. Trunca a 500 caracteres para no sobrecargar el payload.
+Extrae el primer párrafo del cuerpo del artículo con más de 80 caracteres. Trunca a 500 caracteres.
+
+### `_image(response)` → `str | None`
+
+Extrae la URL de la imagen principal de la infobox y la normaliza a `https://` (Wikipedia sirve algunas URLs como `//upload.wikimedia.org/...`).
 
 ### `_extract_year(text)` → `int | None`
 
-Extrae el primer año de 4 dígitos del texto de nacimiento/fallecimiento. Ejemplo: `"17 de diciembre de 1892, El Ferrol"` → `1892`.
+Extrae el primer año de 4 dígitos. Ejemplo: `"17 de diciembre de 1892, El Ferrol"` → `1892`.
 
 ---
 
-## Ampliar el crawl por categorías
+## Ejecutar el spider
 
-En el MVP los spiders arrancan con una sola URL por tipo. Para un seed masivo, basta con añadir URLs de categorías y usar los callbacks correctos:
+```bash
+# Crawl completo de categorías
+cd scraper/ares
+BACKEND_URL=http://localhost:3000 SCRAPER_API_KEY=secret scrapy crawl wikipedia
 
-```python
-battle_start_urls = [
-    'https://es.wikipedia.org/wiki/Categor%C3%ADa:Batallas_de_Espa%C3%B1a',
-    'https://en.wikipedia.org/wiki/Category:Battles_by_century',
-]
+# Artículo individual (sin modificar start_urls)
+scrapy crawl wikipedia -s CLOSESPIDER_ITEMCOUNT=1 \
+  -a start_urls=https://es.wikipedia.org/wiki/Batalla_del_Ebro
 
-war_start_urls = [
-    'https://es.wikipedia.org/wiki/Categor%C3%ADa:Guerras_de_Espa%C3%B1a',
-    'https://en.wikipedia.org/wiki/Category:Wars_by_century',
-]
+# Con caché HTTP (no re-descarga páginas ya vistas)
+SCRAPY_HTTPCACHE=1 scrapy crawl wikipedia
 
-commander_start_urls = [
-    'https://es.wikipedia.org/wiki/Categor%C3%ADa:Militares_de_Espa%C3%B1a',
-]
+# Ver ajuste de throttle en tiempo real
+scrapy crawl wikipedia --loglevel DEBUG 2>&1 | grep Crawled
 ```
 
-Y añadir un método que navegue por la paginación de la categoría:
-
-```python
-def parse_category(self, response, item_callback):
-    for link in response.css('div.mw-category a::attr(href)').getall():
-        yield response.follow(link, callback=item_callback)
-
-    next_page = response.css("a:contains('página siguiente')::attr(href)").get()
-    if next_page:
-        yield response.follow(next_page, callback=lambda r: self.parse_category(r, item_callback))
-```
+!!! tip "Prueba con una sola categoría"
+    Añade `CLOSESPIDER_PAGECOUNT=50` para limitar el crawl durante desarrollo:
+    ```bash
+    scrapy crawl wikipedia -s CLOSESPIDER_PAGECOUNT=50
+    ```
