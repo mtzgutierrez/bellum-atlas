@@ -174,13 +174,27 @@ export class ScraperService {
   private async _upsertFactions(tx: any, entityType: 'battle' | 'war', entityId: string, dto: {
     belligerents?: { side1?: string; side2?: string };
     commanders?: { side1?: string; side2?: string };
-    casualties?: { side1?: string; side2?: string };
+    casualties?: {
+      side1?: { raw?: string; min?: number; max?: number } | string;
+      side2?: { raw?: string; min?: number; max?: number } | string;
+    };
     strength?: { side1?: string; side2?: string };
   }) {
     for (const side of [1, 2] as const) {
       const belligerents = side === 1 ? dto.belligerents?.side1 : dto.belligerents?.side2;
-      const casualtiesRaw = side === 1 ? dto.casualties?.side1 : dto.casualties?.side2;
       const commanderText = side === 1 ? dto.commanders?.side1 : dto.commanders?.side2;
+      const casualtiesRaw_or_obj = side === 1 ? dto.casualties?.side1 : dto.casualties?.side2;
+
+      // casualties puede llegar como string (guerra) o { raw, min, max } (batalla normalizada)
+      const casualtiesRaw = typeof casualtiesRaw_or_obj === 'string'
+        ? casualtiesRaw_or_obj
+        : (casualtiesRaw_or_obj as { raw?: string } | undefined)?.raw ?? null;
+      const casualtiesMin = typeof casualtiesRaw_or_obj === 'object' && casualtiesRaw_or_obj !== null
+        ? (casualtiesRaw_or_obj as { min?: number }).min ?? null
+        : null;
+      const casualtiesMax = typeof casualtiesRaw_or_obj === 'object' && casualtiesRaw_or_obj !== null
+        ? (casualtiesRaw_or_obj as { max?: number }).max ?? null
+        : null;
 
       let factionId: string;
 
@@ -191,8 +205,8 @@ export class ScraperService {
 
         const faction = await tx.battleFaction.upsert({
           where: { battleId_side: { battleId: entityId, side } },
-          create: { battleId: entityId, side, belligerents, casualtiesRaw, strengthRaw },
-          update: { belligerents, casualtiesRaw, strengthRaw },
+          create: { battleId: entityId, side, belligerents, casualtiesRaw, casualtiesMin, casualtiesMax, strengthRaw },
+          update: { belligerents, casualtiesRaw, casualtiesMin, casualtiesMax, strengthRaw },
         });
         factionId = faction.id;
       } else {

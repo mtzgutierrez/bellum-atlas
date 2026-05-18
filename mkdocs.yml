@@ -72,6 +72,7 @@ nav:
       - Spider de Wikipedia: scraper/spider.md
       - Items y campos: scraper/items.md
       - Pipeline: scraper/pipeline.md
+      - Normalización: scraper/normalizacion.md
       - Configuración: scraper/configuracion.md
   - Backend:
       - Visión general: backend/index.md
