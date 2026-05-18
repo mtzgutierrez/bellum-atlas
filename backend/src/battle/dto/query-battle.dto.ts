@@ -1,27 +1,35 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { BattleType } from '@prisma/client';
 
 export class QueryBattleDto {
-  /** Búsqueda full-text: nombre, guerra o lugar. */
+  @ApiPropertyOptional({ description: 'Búsqueda full-text: nombre, guerra o lugar.' })
   q?: string;
 
-  /** Slug de `HistoricalEra` (ej: "ancient", "medieval"). */
+  @ApiPropertyOptional({ description: 'Slug de HistoricalEra (ej: "ancient", "medieval").' })
   era?: string;
 
-  /** Resultado: "victory" | "defeat" | "draw" | "inconclusive". */
+  @ApiPropertyOptional({
+    description: 'Resultado de la batalla.',
+    enum: ['victory', 'defeat', 'draw', 'inconclusive'],
+  })
   result?: string;
 
-  /** Tipo de batalla. */
+  @ApiPropertyOptional({ description: 'Tipo de batalla.', enum: BattleType })
   type?: BattleType;
 
-  /** País involucrado (se busca en `location.country`). */
+  @ApiPropertyOptional({ description: 'País involucrado (busca en location.country).' })
   country?: string;
 
-  /** Número de página (default: 1). */
+  @ApiPropertyOptional({ description: 'Número de página.', default: 1 })
   page?: number;
 
-  /** Ítems por página (default: 20, max: 100). */
+  @ApiPropertyOptional({ description: 'Ítems por página (máx. 100).', default: 20 })
   limit?: number;
 
-  /** Campo de ordenación: "date" | "name" (default: "date"). */
+  @ApiPropertyOptional({
+    description: 'Campo de ordenación.',
+    enum: ['date', 'name'],
+    default: 'date',
+  })
   sortBy?: 'date' | 'name';
 }

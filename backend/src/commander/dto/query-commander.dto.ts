@@ -1,10 +1,12 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
 export class QueryCommanderDto {
-  /** Búsqueda por nombre de comandante. */
+  @ApiPropertyOptional({ description: 'Búsqueda por nombre de comandante.' })
   q?: string;
 
-  /** Número de página (default: 1). */
+  @ApiPropertyOptional({ description: 'Número de página.', default: 1 })
   page?: number;
 
-  /** Ítems por página (default: 20, max: 100). */
+  @ApiPropertyOptional({ description: 'Ítems por página (máx. 100).', default: 20 })
   limit?: number;
 }

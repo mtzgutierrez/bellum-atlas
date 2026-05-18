@@ -1,15 +1,17 @@
-/** Opciones al vincular un ítem de media a una entidad. */
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
 export class AttachMediaDto {
-  /**
-   * Si es true, este ítem se convierte en la imagen representativa
-   * de la entidad. El sistema desactiva automáticamente cualquier
-   * isPrimary=true anterior de la misma entidad dentro de una transacción.
-   */
+  @ApiPropertyOptional({
+    description:
+      'Si es true, este ítem se convierte en la imagen representativa de la entidad. ' +
+      'El sistema desactiva automáticamente cualquier isPrimary=true anterior dentro de una transacción.',
+    default: false,
+  })
   isPrimary?: boolean;
 
-  /**
-   * Posición en una galería futura (0 = primera posición).
-   * Por defecto 0.
-   */
+  @ApiPropertyOptional({
+    description: 'Posición en una galería futura (0 = primera posición).',
+    default: 0,
+  })
   order?: number;
 }
