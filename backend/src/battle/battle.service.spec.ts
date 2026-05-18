@@ -1,10 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { BattleType } from '@prisma/client';
 import { BattleService } from './battle.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { BattleRepository } from './battle.repository';
 
-// @prisma/client is only available after `prisma generate`.
 jest.mock('@prisma/client', () => ({
   BattleType: { LAND: 'LAND', NAVAL: 'NAVAL', AIR: 'AIR', SIEGE: 'SIEGE', MIXED: 'MIXED' },
   PrismaClient: jest.fn(),
@@ -12,18 +10,17 @@ jest.mock('@prisma/client', () => ({
 
 // ─── Stubs ────────────────────────────────────────────────────────────────────
 
-const LOCATION_STUB = { name: 'Waterloo', country: 'Bélgica', lat: 50.68, lon: 4.41 };
 const ERA_STUB = { name: 'Edad Contemporánea', slug: 'contemporary' };
+const LOCATION_STUB = { name: 'Waterloo', country: 'Bélgica', lat: 50.68, lon: 4.41 };
 
 const BATTLE_STUB = {
   id: 'battle-1',
   name: 'Batalla de Waterloo',
   slug: 'batalla-de-waterloo',
-  description: null,
   date: new Date('1815-06-18'),
   dateText: '18 de junio de 1815',
   result: 'victory',
-  type: BattleType.LAND,
+  type: 'LAND',
   wikipediaUrl: 'https://es.wikipedia.org/wiki/Batalla_de_Waterloo',
   eraId: 'era-1',
   locationId: 'loc-1',
@@ -38,14 +35,11 @@ const BATTLE_STUB = {
 
 // ─── Mock factory ─────────────────────────────────────────────────────────────
 
-function buildMockPrisma() {
+function buildMockRepository() {
   return {
-    battle: {
-      findMany: jest.fn(),
-      findFirst: jest.fn(),
-      count: jest.fn(),
-    },
-    $transaction: jest.fn(),
+    findAll: jest.fn(),
+    findByIdOrSlug: jest.fn(),
+    findRelated: jest.fn(),
   };
 }
 
@@ -53,14 +47,14 @@ function buildMockPrisma() {
 
 describe('BattleService', () => {
   let service: BattleService;
-  let prisma: ReturnType<typeof buildMockPrisma>;
+  let repo: ReturnType<typeof buildMockRepository>;
 
   beforeEach(async () => {
-    prisma = buildMockPrisma();
+    repo = buildMockRepository();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BattleService,
-        { provide: PrismaService, useValue: prisma },
+        { provide: BattleRepository, useValue: repo },
       ],
     }).compile();
     service = module.get<BattleService>(BattleService);
@@ -73,7 +67,7 @@ describe('BattleService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   describe('findAll', () => {
     it('happy: returns paginated battles with default params', async () => {
-      prisma.$transaction.mockResolvedValue([[BATTLE_STUB], 1]);
+      repo.findAll.mockResolvedValue([[BATTLE_STUB], 1]);
 
       const result = await service.findAll({});
 
@@ -82,7 +76,7 @@ describe('BattleService', () => {
     });
 
     it('happy: returns correct meta for multi-page results', async () => {
-      prisma.$transaction.mockResolvedValue([Array(20).fill(BATTLE_STUB), 45]);
+      repo.findAll.mockResolvedValue([Array(20).fill(BATTLE_STUB), 45]);
 
       const result = await service.findAll({ page: 1, limit: 20 });
 
@@ -91,7 +85,7 @@ describe('BattleService', () => {
     });
 
     it('edge: empty result returns {data: [], meta: {total: 0}}', async () => {
-      prisma.$transaction.mockResolvedValue([[], 0]);
+      repo.findAll.mockResolvedValue([[], 0]);
 
       const result = await service.findAll({});
 
@@ -101,18 +95,17 @@ describe('BattleService', () => {
     });
 
     it('edge: limit is capped at 100', async () => {
-      prisma.$transaction.mockResolvedValue([[], 0]);
+      repo.findAll.mockResolvedValue([[], 0]);
 
       await service.findAll({ limit: 9999 });
 
-      // $transaction receives two Prisma operations; the findMany should have take=100
-      const [[findManyCall]] = prisma.$transaction.mock.calls;
-      // The array passed to $transaction contains the query calls
-      expect(findManyCall).toBeDefined();
+      // Repository was called with take capped at 100
+      const [, , , take] = repo.findAll.mock.calls[0];
+      expect(take).toBe(100);
     });
 
     it('edge: page < 1 is normalised to 1', async () => {
-      prisma.$transaction.mockResolvedValue([[], 0]);
+      repo.findAll.mockResolvedValue([[], 0]);
 
       const result = await service.findAll({ page: -5 });
 
@@ -120,16 +113,17 @@ describe('BattleService', () => {
     });
 
     it('edge: sortBy=name uses name:asc ordering', async () => {
-      prisma.$transaction.mockResolvedValue([[BATTLE_STUB], 1]);
+      repo.findAll.mockResolvedValue([[BATTLE_STUB], 1]);
 
       await service.findAll({ sortBy: 'name' });
 
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      const [, orderBy] = repo.findAll.mock.calls[0];
+      expect(orderBy).toEqual({ name: 'asc' });
     });
 
     it('error: DB error propagates as-is', async () => {
       const boom = new Error('connection lost');
-      prisma.$transaction.mockRejectedValue(boom);
+      repo.findAll.mockRejectedValue(boom);
 
       await expect(service.findAll({})).rejects.toBe(boom);
     });
@@ -140,8 +134,8 @@ describe('BattleService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   describe('findOne', () => {
     it('happy: finds battle by id and returns detail with relatedBattles', async () => {
-      prisma.battle.findFirst.mockResolvedValue(BATTLE_STUB);
-      prisma.battle.findMany.mockResolvedValue([]);
+      repo.findByIdOrSlug.mockResolvedValue(BATTLE_STUB);
+      repo.findRelated.mockResolvedValue([]);
 
       const result = await service.findOne('battle-1') as any;
 
@@ -150,24 +144,18 @@ describe('BattleService', () => {
     });
 
     it('happy: finds battle by slug', async () => {
-      prisma.battle.findFirst.mockResolvedValue(BATTLE_STUB);
-      prisma.battle.findMany.mockResolvedValue([]);
+      repo.findByIdOrSlug.mockResolvedValue(BATTLE_STUB);
+      repo.findRelated.mockResolvedValue([]);
 
-      const result = await service.findOne('batalla-de-waterloo') as any;
+      await service.findOne('batalla-de-waterloo');
 
-      // OR clause passes both id and slug — behaviour verified by findFirst mock
-      expect(prisma.battle.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { OR: [{ id: 'batalla-de-waterloo' }, { slug: 'batalla-de-waterloo' }] },
-        }),
-      );
-      expect(result).toBeDefined();
+      expect(repo.findByIdOrSlug).toHaveBeenCalledWith('batalla-de-waterloo');
     });
 
     it('happy: includes related battles from same wars', async () => {
-      const related = { id: 'battle-2', name: 'Batalla de Ligny', slug: 'batalla-de-ligny', date: null, result: 'victory', type: BattleType.LAND };
-      prisma.battle.findFirst.mockResolvedValue(BATTLE_STUB);
-      prisma.battle.findMany.mockResolvedValue([related]);
+      const related = { id: 'battle-2', name: 'Batalla de Ligny', slug: 'batalla-de-ligny', date: null, result: 'victory', type: 'LAND' };
+      repo.findByIdOrSlug.mockResolvedValue(BATTLE_STUB);
+      repo.findRelated.mockResolvedValue([related]);
 
       const result = await service.findOne('battle-1') as any;
 
@@ -176,24 +164,23 @@ describe('BattleService', () => {
     });
 
     it('edge: battle with no wars returns empty relatedBattles without extra query', async () => {
-      const noWarsBattle = { ...BATTLE_STUB, wars: [] };
-      prisma.battle.findFirst.mockResolvedValue(noWarsBattle);
+      repo.findByIdOrSlug.mockResolvedValue({ ...BATTLE_STUB, wars: [] });
 
       const result = await service.findOne('battle-1') as any;
 
       expect(result.relatedBattles).toEqual([]);
-      expect(prisma.battle.findMany).not.toHaveBeenCalled();
+      expect(repo.findRelated).not.toHaveBeenCalled();
     });
 
     it('error: throws NotFoundException when battle not found', async () => {
-      prisma.battle.findFirst.mockResolvedValue(null);
+      repo.findByIdOrSlug.mockResolvedValue(null);
 
       await expect(service.findOne('ghost-id')).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('error: DB error on findFirst propagates as-is', async () => {
+    it('error: DB error on findByIdOrSlug propagates as-is', async () => {
       const boom = new Error('timeout');
-      prisma.battle.findFirst.mockRejectedValue(boom);
+      repo.findByIdOrSlug.mockRejectedValue(boom);
 
       await expect(service.findOne('battle-1')).rejects.toBe(boom);
     });

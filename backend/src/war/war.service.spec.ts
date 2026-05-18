@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { WarService } from './war.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { WarRepository } from './war.repository';
 
 // ─── Stubs ────────────────────────────────────────────────────────────────────
 
@@ -31,14 +31,10 @@ const WAR_STUB = {
   media: [],
 };
 
-function buildMockPrisma() {
+function buildMockRepository() {
   return {
-    war: {
-      findMany: jest.fn(),
-      findFirst: jest.fn(),
-      count: jest.fn(),
-    },
-    $transaction: jest.fn(),
+    findAll: jest.fn(),
+    findByIdOrSlug: jest.fn(),
   };
 }
 
@@ -46,12 +42,12 @@ function buildMockPrisma() {
 
 describe('WarService', () => {
   let service: WarService;
-  let prisma: ReturnType<typeof buildMockPrisma>;
+  let repo: ReturnType<typeof buildMockRepository>;
 
   beforeEach(async () => {
-    prisma = buildMockPrisma();
+    repo = buildMockRepository();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [WarService, { provide: PrismaService, useValue: prisma }],
+      providers: [WarService, { provide: WarRepository, useValue: repo }],
     }).compile();
     service = module.get<WarService>(WarService);
   });
@@ -63,7 +59,7 @@ describe('WarService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   describe('findAll', () => {
     it('happy: returns paginated wars', async () => {
-      prisma.$transaction.mockResolvedValue([[WAR_STUB], 1]);
+      repo.findAll.mockResolvedValue([[WAR_STUB], 1]);
 
       const result = await service.findAll({});
 
@@ -72,7 +68,7 @@ describe('WarService', () => {
     });
 
     it('edge: empty result', async () => {
-      prisma.$transaction.mockResolvedValue([[], 0]);
+      repo.findAll.mockResolvedValue([[], 0]);
 
       const result = await service.findAll({});
 
@@ -80,16 +76,16 @@ describe('WarService', () => {
       expect(result.meta.total).toBe(0);
     });
 
-    it('edge: q filter is forwarded', async () => {
-      prisma.$transaction.mockResolvedValue([[WAR_STUB], 1]);
+    it('edge: q filter is forwarded to repository', async () => {
+      repo.findAll.mockResolvedValue([[WAR_STUB], 1]);
 
       await service.findAll({ q: 'Napoleon' });
 
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(repo.findAll).toHaveBeenCalledTimes(1);
     });
 
     it('edge: pagination is normalised', async () => {
-      prisma.$transaction.mockResolvedValue([[], 0]);
+      repo.findAll.mockResolvedValue([[], 0]);
 
       const result = await service.findAll({ page: 3, limit: 5 });
 
@@ -98,7 +94,7 @@ describe('WarService', () => {
     });
 
     it('error: DB error propagates', async () => {
-      prisma.$transaction.mockRejectedValue(new Error('timeout'));
+      repo.findAll.mockRejectedValue(new Error('timeout'));
 
       await expect(service.findAll({})).rejects.toThrow('timeout');
     });
@@ -109,7 +105,7 @@ describe('WarService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   describe('findOne', () => {
     it('happy: returns war with stats computed from dates', async () => {
-      prisma.war.findFirst.mockResolvedValue(WAR_STUB);
+      repo.findByIdOrSlug.mockResolvedValue(WAR_STUB);
 
       const result = await service.findOne('war-1') as any;
 
@@ -120,20 +116,15 @@ describe('WarService', () => {
     });
 
     it('happy: accepts slug', async () => {
-      prisma.war.findFirst.mockResolvedValue(WAR_STUB);
+      repo.findByIdOrSlug.mockResolvedValue(WAR_STUB);
 
       await service.findOne('guerras-napoleonicas');
 
-      expect(prisma.war.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { OR: [{ id: 'guerras-napoleonicas' }, { slug: 'guerras-napoleonicas' }] },
-        }),
-      );
+      expect(repo.findByIdOrSlug).toHaveBeenCalledWith('guerras-napoleonicas');
     });
 
     it('edge: durationDays is null when dates are missing', async () => {
-      const noDates = { ...WAR_STUB, startDate: null, endDate: null };
-      prisma.war.findFirst.mockResolvedValue(noDates);
+      repo.findByIdOrSlug.mockResolvedValue({ ...WAR_STUB, startDate: null, endDate: null });
 
       const result = await service.findOne('war-1') as any;
 
@@ -141,8 +132,7 @@ describe('WarService', () => {
     });
 
     it('edge: totalBattles is 0 when no battles linked', async () => {
-      const noBattles = { ...WAR_STUB, battles: [] };
-      prisma.war.findFirst.mockResolvedValue(noBattles);
+      repo.findByIdOrSlug.mockResolvedValue({ ...WAR_STUB, battles: [] });
 
       const result = await service.findOne('war-1') as any;
 
@@ -150,13 +140,13 @@ describe('WarService', () => {
     });
 
     it('error: throws NotFoundException when war not found', async () => {
-      prisma.war.findFirst.mockResolvedValue(null);
+      repo.findByIdOrSlug.mockResolvedValue(null);
 
       await expect(service.findOne('ghost')).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('error: DB error propagates', async () => {
-      prisma.war.findFirst.mockRejectedValue(new Error('boom'));
+      repo.findByIdOrSlug.mockRejectedValue(new Error('boom'));
 
       await expect(service.findOne('war-1')).rejects.toThrow('boom');
     });

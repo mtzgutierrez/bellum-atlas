@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ScraperService } from './scraper.service';
+import { ScraperRepository } from './scraper.repository';
 import { PrismaService } from '../prisma/prisma.service';
 import { MediaSource } from '@prisma/client';
 
@@ -57,7 +58,7 @@ describe('ScraperService', () => {
   beforeEach(async () => {
     prisma = buildMockPrisma();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ScraperService, { provide: PrismaService, useValue: prisma }],
+      providers: [ScraperService, ScraperRepository, { provide: PrismaService, useValue: prisma }],
     }).compile();
     service = module.get<ScraperService>(ScraperService);
   });

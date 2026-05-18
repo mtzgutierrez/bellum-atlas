@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { CommanderService } from './commander.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { CommanderRepository } from './commander.repository';
 
 // ─── Stubs ────────────────────────────────────────────────────────────────────
 
@@ -48,14 +48,12 @@ const COMMANDER_STUB = {
   media: [],
 };
 
-function buildMockPrisma() {
+// ─── Mock factory ─────────────────────────────────────────────────────────────
+
+function buildMockRepository() {
   return {
-    commander: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      count: jest.fn(),
-    },
-    $transaction: jest.fn(),
+    findAll: jest.fn(),
+    findById: jest.fn(),
   };
 }
 
@@ -63,12 +61,12 @@ function buildMockPrisma() {
 
 describe('CommanderService', () => {
   let service: CommanderService;
-  let prisma: ReturnType<typeof buildMockPrisma>;
+  let repo: ReturnType<typeof buildMockRepository>;
 
   beforeEach(async () => {
-    prisma = buildMockPrisma();
+    repo = buildMockRepository();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [CommanderService, { provide: PrismaService, useValue: prisma }],
+      providers: [CommanderService, { provide: CommanderRepository, useValue: repo }],
     }).compile();
     service = module.get<CommanderService>(CommanderService);
   });
@@ -80,7 +78,7 @@ describe('CommanderService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   describe('findAll', () => {
     it('happy: returns paginated commanders', async () => {
-      prisma.$transaction.mockResolvedValue([[COMMANDER_STUB], 1]);
+      repo.findAll.mockResolvedValue([[COMMANDER_STUB], 1]);
 
       const result = await service.findAll({});
 
@@ -89,7 +87,7 @@ describe('CommanderService', () => {
     });
 
     it('edge: empty result', async () => {
-      prisma.$transaction.mockResolvedValue([[], 0]);
+      repo.findAll.mockResolvedValue([[], 0]);
 
       const result = await service.findAll({});
 
@@ -97,15 +95,15 @@ describe('CommanderService', () => {
     });
 
     it('edge: q filter is applied', async () => {
-      prisma.$transaction.mockResolvedValue([[COMMANDER_STUB], 1]);
+      repo.findAll.mockResolvedValue([[COMMANDER_STUB], 1]);
 
       await service.findAll({ q: 'Wellington' });
 
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(repo.findAll).toHaveBeenCalledTimes(1);
     });
 
     it('error: DB error propagates', async () => {
-      prisma.$transaction.mockRejectedValue(new Error('db'));
+      repo.findAll.mockRejectedValue(new Error('db'));
 
       await expect(service.findAll({})).rejects.toThrow('db');
     });
@@ -116,7 +114,7 @@ describe('CommanderService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   describe('findOne', () => {
     it('happy: returns commander with flat battle history', async () => {
-      prisma.commander.findUnique.mockResolvedValue(COMMANDER_STUB);
+      repo.findById.mockResolvedValue(COMMANDER_STUB);
 
       const result = await service.findOne('cmd-1') as any;
 
@@ -130,7 +128,7 @@ describe('CommanderService', () => {
     });
 
     it('happy: computes win rate correctly (2/3 ≈ 0.67)', async () => {
-      prisma.commander.findUnique.mockResolvedValue(COMMANDER_STUB);
+      repo.findById.mockResolvedValue(COMMANDER_STUB);
 
       const result = await service.findOne('cmd-1') as any;
 
@@ -140,8 +138,7 @@ describe('CommanderService', () => {
     });
 
     it('edge: commander with no battles has winRate 0', async () => {
-      const noBattles = { ...COMMANDER_STUB, battles: [] };
-      prisma.commander.findUnique.mockResolvedValue(noBattles);
+      repo.findById.mockResolvedValue({ ...COMMANDER_STUB, battles: [] });
 
       const result = await service.findOne('cmd-1') as any;
 
@@ -157,7 +154,7 @@ describe('CommanderService', () => {
           .slice(0, 2)
           .map((b) => ({ ...b, battleFaction: { ...b.battleFaction, result: 'victory' } })),
       };
-      prisma.commander.findUnique.mockResolvedValue(allWins);
+      repo.findById.mockResolvedValue(allWins);
 
       const result = await service.findOne('cmd-1') as any;
 
@@ -165,13 +162,13 @@ describe('CommanderService', () => {
     });
 
     it('error: throws NotFoundException when commander not found', async () => {
-      prisma.commander.findUnique.mockResolvedValue(null);
+      repo.findById.mockResolvedValue(null);
 
       await expect(service.findOne('ghost')).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('error: DB error propagates', async () => {
-      prisma.commander.findUnique.mockRejectedValue(new Error('timeout'));
+      repo.findById.mockRejectedValue(new Error('timeout'));
 
       await expect(service.findOne('cmd-1')).rejects.toThrow('timeout');
     });

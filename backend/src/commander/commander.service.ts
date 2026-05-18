@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { CommanderRepository } from './commander.repository';
 import { QueryCommanderDto } from './dto/query-commander.dto';
 import {
   PaginatedResult,
@@ -8,53 +8,9 @@ import {
   normalisePagination,
 } from '../common/utils/pagination.util';
 
-// ─── Includes ──────────────────────────────────────────────────────────────────
-
-const COMMANDER_LIST_INCLUDE = {
-  _count: { select: { battles: true } },
-  media: {
-    where: { isPrimary: true },
-    include: { media: { select: { url: true, altText: true } } },
-    take: 1,
-  },
-} satisfies Prisma.CommanderInclude;
-
-const COMMANDER_DETAIL_INCLUDE = {
-  battles: {
-    include: {
-      battleFaction: {
-        select: {
-          result: true,
-          side: true,
-          battle: {
-            select: { id: true, name: true, slug: true, date: true, type: true },
-          },
-        },
-      },
-    },
-  },
-  wars: {
-    include: {
-      warFaction: {
-        select: {
-          result: true,
-          side: true,
-          war: { select: { id: true, name: true, slug: true } },
-        },
-      },
-    },
-  },
-  media: {
-    orderBy: { order: 'asc' as const },
-    include: { media: true },
-  },
-} satisfies Prisma.CommanderInclude;
-
-// ─── Service ───────────────────────────────────────────────────────────────────
-
 @Injectable()
 export class CommanderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly commanderRepository: CommanderRepository) {}
 
   async findAll(dto: QueryCommanderDto): Promise<PaginatedResult<unknown>> {
     const { q } = dto;
@@ -64,25 +20,13 @@ export class CommanderService {
       ? { name: { contains: q, mode: 'insensitive' } }
       : {};
 
-    const [data, total] = await this.prisma.$transaction([
-      this.prisma.commander.findMany({
-        where,
-        skip,
-        take,
-        orderBy: { name: 'asc' },
-        include: COMMANDER_LIST_INCLUDE,
-      }),
-      this.prisma.commander.count({ where }),
-    ]);
+    const [data, total] = await this.commanderRepository.findAll(where, skip, take);
 
     return { data, meta: buildMeta(total, page, limit) };
   }
 
   async findOne(id: string): Promise<unknown> {
-    const commander = await this.prisma.commander.findUnique({
-      where: { id },
-      include: COMMANDER_DETAIL_INCLUDE,
-    });
+    const commander = await this.commanderRepository.findById(id);
 
     if (!commander) {
       throw new NotFoundException(`Comandante con id "${id}" no encontrado`);
