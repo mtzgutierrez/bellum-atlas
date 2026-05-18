@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 // @ts-expect-error
 import { feature } from 'topojson-client'
 import { TopBarDesktop } from '../components/TopBar'
 import BottomNav from '../components/BottomNav'
 import Icon from '../components/Icon'
-import { battles, eras } from '../data/mock'
-import type { Battle } from '../data/mock'
+import { useApiFetch } from '../hooks/useApiFetch'
+import { fetchBattles } from '../api/client'
+import type { ApiBattleListItem } from '../api/types'
+import { eras } from '../data/mock'
 import { useIsMobile } from '../hooks/useIsMobile'
 import styles from './MapExplorer.module.css'
 
@@ -16,19 +18,16 @@ const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 const W = 960
 const H = 480
 
-const eraKeyToBattleEras: Record<string, string[]> = {
-  ancient:      ['Antigüedad'],
-  medieval:     ['Medieval', 'XV'],
-  modern:       ['XVI', 'XVII', 'XVIII'],
-  contemporary: ['XIX', 'XX', 'XXI'],
-}
-
 const eraLabels: Record<string, string> = {
   all:          'Todas las eras',
   ancient:      'Antigüedad',
   medieval:     'Edad Media',
   modern:       'Edad Moderna',
   contemporary: 'Edad Contemporánea',
+}
+
+const typeLabels: Record<string, string> = {
+  land: 'Terrestre', naval: 'Naval', air: 'Aéreo', siege: 'Asedio', combined: 'Combinado',
 }
 
 function project(lon: number, lat: number): [number, number] {
@@ -53,7 +52,6 @@ function geomToPath(geom: any): string {
 }
 
 type VB = { x: number; y: number; w: number; h: number }
-
 const INITIAL_VB: VB = { x: 0, y: 20, w: W, h: H - 40 }
 
 function WorldMap({
@@ -61,9 +59,9 @@ function WorldMap({
   selected,
   onSelect,
 }: {
-  visible: Battle[]
-  selected: Battle | null
-  onSelect: (b: Battle | null) => void
+  visible: ApiBattleListItem[]
+  selected: ApiBattleListItem | null
+  onSelect: (b: ApiBattleListItem | null) => void
 }) {
   const svgRef   = useRef<SVGSVGElement>(null)
   const [paths, setPaths]       = useState<string[]>([])
@@ -149,7 +147,9 @@ function WorldMap({
         <path key={i} d={d} fill="#0e1610" stroke="rgba(107,122,90,0.35)" strokeWidth={0.4 / zoom} />
       ))}
       {visible.map(b => {
-        const [cx, cy] = project(b.lon, b.lat)
+        const lat = b.location!.lat!
+        const lon = b.location!.lon!
+        const [cx, cy] = project(lon, lat)
         const isSelected = selected?.id === b.id
         return (
           <g key={b.id} onClick={() => onSelect(isSelected ? null : b)} style={{ cursor: 'pointer' }}>
@@ -164,13 +164,19 @@ function WorldMap({
   )
 }
 
-export function MapExplorerDesktop() {
-  const [selected, setSelected] = useState<Battle | null>(null)
-  const [eraFilter, setEraFilter] = useState<string>('all')
-
-  const visible = battles.filter(b =>
-    eraFilter === 'all' || (eraKeyToBattleEras[eraFilter] ?? []).includes(b.era)
+function useMapBattles(eraFilter: string) {
+  const fetcher = useCallback(
+    () => fetchBattles({ era: eraFilter === 'all' ? undefined : eraFilter, limit: 100 }),
+    [eraFilter],
   )
+  const { data } = useApiFetch(fetcher, [eraFilter])
+  return (data?.data ?? []).filter(b => b.location?.lat != null && b.location?.lon != null)
+}
+
+export function MapExplorerDesktop() {
+  const [selected, setSelected] = useState<ApiBattleListItem | null>(null)
+  const [eraFilter, setEraFilter] = useState('all')
+  const visible = useMapBattles(eraFilter)
 
   return (
     <div className="ax-page">
@@ -189,7 +195,7 @@ export function MapExplorerDesktop() {
         <div className={styles.battleCount}>
           <div className={`ax-mono ${styles.battleCountLabel}`}>MOSTRANDO</div>
           <div className={`ax-display ${styles.battleCountValue}`}>{visible.length}</div>
-          <div className={`ax-stat-label ${styles.battleCountSub}`}>de 5.247 batallas</div>
+          <div className={`ax-stat-label ${styles.battleCountSub}`}>batallas con coord.</div>
           {eraFilter !== 'all' && (
             <div className={`ax-mono ${styles.battleCountEra}`}>{eraLabels[eraFilter].toUpperCase()}</div>
           )}
@@ -209,22 +215,22 @@ export function MapExplorerDesktop() {
               <Icon name="x" size={12} />
             </button>
             <div className={`ax-mono ${styles.popupEra}`}>
-              {selected.era} · {selected.type === 'land' ? 'Terrestre' : selected.type === 'naval' ? 'Naval' : selected.type === 'air' ? 'Aéreo' : 'Asedio'}
+              {selected.era?.name ?? '—'} · {typeLabels[selected.type?.toLowerCase() ?? ''] ?? selected.type}
             </div>
             <div className={`ax-display ${styles.popupName}`}>{selected.name}</div>
-            <div className={styles.popupWar}>{selected.war}</div>
-            <div className={`ax-mono ${styles.popupDate}`}>{selected.dateLabel}</div>
-            <div className={styles.popupPlace}>{selected.place}</div>
-            <div className={styles.popupStats}>
-              <div>
-                <div className={`ax-label ${styles.popupStatLabel}`}>Fuerzas</div>
-                <div className={`ax-mono ${styles.popupStatValue}`}>{selected.forces}</div>
-              </div>
-              <div>
-                <div className={`ax-label ${styles.popupStatLabel}`}>Bajas est.</div>
-                <div className={`ax-mono ${styles.popupStatValue}`}>{selected.casualties}</div>
-              </div>
+            <div className={styles.popupWar}>{selected.wars[0]?.war.name ?? ''}</div>
+            <div className={`ax-mono ${styles.popupDate}`}>{selected.dateText ?? selected.date?.slice(0, 10) ?? ''}</div>
+            <div className={styles.popupPlace}>
+              {selected.location?.name}{selected.location?.country ? `, ${selected.location.country}` : ''}
             </div>
+            {selected.result && (
+              <div className={styles.popupStats}>
+                <div>
+                  <div className={`ax-label ${styles.popupStatLabel}`}>Resultado</div>
+                  <div className={`ax-mono ${styles.popupStatValue}`}>{selected.result}</div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -233,12 +239,9 @@ export function MapExplorerDesktop() {
 }
 
 export function MapExplorerMobile() {
-  const [selected, setSelected] = useState<Battle | null>(null)
-  const [eraFilter, setEraFilter] = useState<string>('all')
-
-  const visible = battles.filter(b =>
-    eraFilter === 'all' || (eraKeyToBattleEras[eraFilter] ?? []).includes(b.era)
-  )
+  const [selected, setSelected] = useState<ApiBattleListItem | null>(null)
+  const [eraFilter, setEraFilter] = useState('all')
+  const visible = useMapBattles(eraFilter)
 
   return (
     <div className="ax-page">
@@ -263,11 +266,11 @@ export function MapExplorerMobile() {
             <div className={styles.mobileSelected}>
               <div>
                 <div className={`ax-mono ${styles.mobileSelectedEra}`}>
-                  {selected.era.toUpperCase()} · {selected.type.toUpperCase()}
+                  {(selected.era?.name ?? '').toUpperCase()} · {(selected.type ?? '').toUpperCase()}
                 </div>
                 <div className={`ax-display ${styles.mobileSelectedName}`}>{selected.name}</div>
                 <div className={`ax-mono ${styles.mobileSelectedMeta}`}>
-                  {selected.dateLabel} · {selected.place}
+                  {selected.dateText ?? selected.date?.slice(0, 10)} · {selected.location?.name}
                 </div>
               </div>
               <button onClick={() => setSelected(null)} className="ax-btn ax-btn-ghost" style={{ padding: 8 }}>

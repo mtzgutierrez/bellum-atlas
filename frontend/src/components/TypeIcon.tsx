@@ -1,19 +1,20 @@
 import Icon from './Icon'
-import type { BattleType } from '../data/mock'
 
-const typeIconMap: Record<BattleType, string> = {
+const typeIconMap: Record<string, string> = {
   land: 'sword',
   naval: 'anchor',
   air: 'plane',
   siege: 'castle',
+  combined: 'shield',
 }
 
 interface TypeIconProps {
-  type: BattleType
+  type: string | null | undefined
   size?: number
   color?: string
 }
 
 export default function TypeIcon({ type, size = 14, color }: TypeIconProps) {
-  return <Icon name={typeIconMap[type]} size={size} color={color} />
+  const key = type?.toLowerCase() ?? 'land'
+  return <Icon name={typeIconMap[key] ?? 'sword'} size={size} color={color} />
 }

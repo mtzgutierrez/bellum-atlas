@@ -1,5 +1,5 @@
 import ResultBadge from './ResultBadge'
-import type { BattleResult } from '../data/mock'
+import type { ApiFactionResult } from '../api/types'
 
 interface FactionColumnProps {
   side: string
@@ -8,7 +8,7 @@ interface FactionColumnProps {
   commanders: string[]
   forces: string
   casualties: string
-  result: BattleResult
+  result: ApiFactionResult
   accentColor: string
   alignRight?: boolean
 }
@@ -25,7 +25,7 @@ export default function FactionColumn({
       </div>
       <div>
         <div className="ax-display" style={{ fontSize: 22, letterSpacing: '0.04em' }}>{name}</div>
-        {members && (
+        {members && members.length > 0 && (
           <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>{members.join(' · ')}</div>
         )}
       </div>

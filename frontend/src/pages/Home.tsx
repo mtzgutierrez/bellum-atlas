@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useCallback } from 'react'
 import { TopBarDesktop, TopBarMobile } from '../components/TopBar'
 import BottomNav from '../components/BottomNav'
 import Icon from '../components/Icon'
@@ -6,7 +7,9 @@ import BattleCard from '../components/BattleCard'
 import MapBackdrop from '../components/MapBackdrop'
 import MapPin from '../components/MapPin'
 import MapCluster from '../components/MapCluster'
-import { battles, eras } from '../data/mock'
+import { useApiFetch } from '../hooks/useApiFetch'
+import { fetchBattles } from '../api/client'
+import { eras } from '../data/mock'
 import { useIsMobile } from '../hooks/useIsMobile'
 import styles from './Home.module.css'
 
@@ -173,6 +176,10 @@ function EntryPointsDesktop() {
 }
 
 function FeaturedMobile() {
+  const fetcher = useCallback(() => fetchBattles({ limit: 3, sortBy: 'date' }), [])
+  const { data } = useApiFetch(fetcher, [])
+  const featured = data?.data ?? []
+
   return (
     <section className={styles.featuredSection}>
       <div className={styles.featuredHeader}>
@@ -180,7 +187,7 @@ function FeaturedMobile() {
         <Link to="/battles" className="ax-nav-link" style={{ fontSize: 10 }}>Todas →</Link>
       </div>
       <div className={styles.featuredList}>
-        {[battles[1], battles[2], battles[12]].map(b => <BattleCard key={b.id} battle={b} compact />)}
+        {featured.map(b => <BattleCard key={b.id} battle={b} compact />)}
       </div>
     </section>
   )
