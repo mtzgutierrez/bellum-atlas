@@ -1,34 +1,50 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { BattleRepository } from './battle.repository';
-import { QueryBattleDto } from './dto/query-battle.dto';
 import {
-  PaginatedResult,
-  buildMeta,
-  normalisePagination,
-} from '../common/utils/pagination.util';
+  BattleRepository,
+  BattleSimplified,
+  BattleWithRelations,
+} from './battle.repository';
 
 @Injectable()
 export class BattleService {
-  constructor(private readonly battleRepository: BattleRepository) {}
+  constructor(private readonly repository: BattleRepository) {}
 
-  async findAll(dto: QueryBattleDto): Promise<PaginatedResult<unknown>> {
-    const { page, limit, skip, take } = normalisePagination(dto.page, dto.limit);
-    const [data, total] = await this.battleRepository.findAll(dto, skip, take);
-    return { data, meta: buildMeta(total, page, limit) };
+  // ── Consultas ────────────────────────────────────────────────────────────
+
+  listar(): Promise<BattleSimplified[]> {
+    return this.repository.listar();
   }
 
-  async findOne(idOrSlug: string): Promise<unknown> {
-    const battle = await this.battleRepository.findByIdOrSlug(idOrSlug);
+  buscarPorNombre(nombre: string): Promise<BattleSimplified[]> {
+    return this.repository.buscarPorNombre(nombre);
+  }
 
-    if (!battle) {
-      throw new NotFoundException(`Batalla "${idOrSlug}" no encontrada`);
-    }
+  buscarPorCoordenadas(
+    latitude: number,
+    longitude: number,
+    radius: number,
+  ): Promise<BattleSimplified[]> {
+    return this.repository.buscarPorCoordenadas(latitude, longitude, radius);
+  }
 
-    const warIds = battle.wars.map((bw) => bw.warId);
-    const relatedBattles = warIds.length
-      ? await this.battleRepository.findRelated(warIds, battle.id)
-      : [];
+  buscarPorPeriodo(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<BattleSimplified[]> {
+    return this.repository.buscarPorPeriodo(startDate, endDate);
+  }
 
-    return { ...battle, relatedBattles };
+  buscarPorGuerra(warId: string): Promise<BattleSimplified[]> {
+    return this.repository.buscarPorGuerra(warId);
+  }
+
+  buscarPorComandante(commanderId: string): Promise<BattleSimplified[]> {
+    return this.repository.buscarPorComandante(commanderId);
+  }
+
+  async buscarPorId(id: string): Promise<BattleWithRelations> {
+    const battle = await this.repository.buscarPorId(id);
+    if (!battle) throw new NotFoundException(`Batalla ${id} no encontrada`);
+    return battle;
   }
 }

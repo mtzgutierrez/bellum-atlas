@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { BattleService } from './battle.service';
+import { PrismaModule } from '../prisma/prisma.module';
 import { BattleController } from './battle.controller';
 import { BattleRepository } from './battle.repository';
+import { BattleService } from './battle.service';
 
 @Module({
-  providers: [BattleRepository, BattleService],
+  imports: [PrismaModule],
+  providers: [BattleService, BattleRepository],
   controllers: [BattleController],
   exports: [BattleService],
 })

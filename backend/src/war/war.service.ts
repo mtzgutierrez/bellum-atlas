@@ -1,35 +1,32 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { WarRepository } from './war.repository';
-import { QueryWarDto } from './dto/query-war.dto';
 import {
-  PaginatedResult,
-  buildMeta,
-  normalisePagination,
-} from '../common/utils/pagination.util';
+  WarRepository,
+  WarSimplified,
+  WarWithRelations,
+} from './war.repository';
 
 @Injectable()
 export class WarService {
-  constructor(private readonly warRepository: WarRepository) {}
+  constructor(private readonly repository: WarRepository) {}
 
-  async findAll(dto: QueryWarDto): Promise<PaginatedResult<unknown>> {
-    const { page, limit, skip, take } = normalisePagination(dto.page, dto.limit);
-    const [data, total] = await this.warRepository.findAll(dto, skip, take);
-    return { data, meta: buildMeta(total, page, limit) };
+  listar(): Promise<WarSimplified[]> {
+    return this.repository.listar();
   }
 
-  async findOne(idOrSlug: string): Promise<unknown> {
-    const war = await this.warRepository.findByIdOrSlug(idOrSlug);
+  buscarPorNombre(nombre: string): Promise<WarSimplified[]> {
+    return this.repository.buscarPorNombre(nombre);
+  }
 
-    if (!war) {
-      throw new NotFoundException(`Guerra "${idOrSlug}" no encontrada`);
-    }
+  buscarPorPeriodo(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<WarSimplified[]> {
+    return this.repository.buscarPorPeriodo(startDate, endDate);
+  }
 
-    const totalBattles = war.battles.length;
-    const durationDays =
-      war.startDate && war.endDate
-        ? Math.floor((war.endDate.getTime() - war.startDate.getTime()) / 86_400_000)
-        : null;
-
-    return { ...war, stats: { totalBattles, durationDays } };
+  async buscarPorId(id: string): Promise<WarWithRelations> {
+    const war = await this.repository.buscarPorId(id);
+    if (!war) throw new NotFoundException(`Guerra ${id} no encontrada`);
+    return war;
   }
 }

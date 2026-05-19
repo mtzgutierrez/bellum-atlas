@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { WikidataRepository } from './wikidata.repository';
 import { WikidataService } from './wikidata.service';
 
 describe('WikidataService', () => {
@@ -6,7 +7,10 @@ describe('WikidataService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [WikidataService],
+      providers: [
+        WikidataService,
+        { provide: WikidataRepository, useValue: {} },
+      ],
     }).compile();
 
     service = module.get<WikidataService>(WikidataService);

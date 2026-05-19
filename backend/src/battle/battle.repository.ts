@@ -1,21 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { BattleType, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { QueryBattleDto } from './dto/query-battle.dto';
-
-const BATTLE_LIST_INCLUDE = {
-  era: { select: { name: true, slug: true } },
-  location: { select: { name: true, country: true, lat: true, lon: true } },
-  wars: {
-    include: {
-      war: { select: { id: true, name: true, slug: true } },
-    },
-  },
-} satisfies Prisma.BattleInclude;
 
 const BATTLE_DETAIL_INCLUDE = {
-  era: true,
-  location: true,
   wars: {
     include: {
       war: { select: { id: true, name: true, slug: true } },
@@ -24,102 +11,134 @@ const BATTLE_DETAIL_INCLUDE = {
   factions: {
     orderBy: { side: 'asc' as const },
     include: {
+      faction: {
+        select: { id: true, name: true, slug: true, flagUrl: true },
+      },
       commanders: {
         include: {
-          commander: { select: { id: true, name: true, country: true } },
+          commander: { select: { id: true, name: true, slug: true } },
         },
       },
     },
   },
-  media: {
-    orderBy: { order: 'asc' as const },
-    include: { media: true },
-  },
+  media: true,
 } satisfies Prisma.BattleInclude;
 
-export type BattleListItem = Prisma.BattleGetPayload<{
-  include: typeof BATTLE_LIST_INCLUDE;
-}>;
-export type BattleDetail = Prisma.BattleGetPayload<{
+export type BattleWithRelations = Prisma.BattleGetPayload<{
   include: typeof BATTLE_DETAIL_INCLUDE;
 }>;
-export type RelatedBattle = {
-  id: string;
-  name: string;
-  slug: string;
-  date: Date | null;
-  result: string | null;
-  type: Prisma.BattleGetPayload<Record<string, never>>['type'];
-};
+
+const SIMPLIFIED_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  date: true,
+  dateStart: true,
+  dateEnd: true,
+  locationName: true,
+  country: true,
+  imageUrl: true,
+  wikipediaUrl: true,
+} satisfies Prisma.BattleSelect;
+
+export type BattleSimplified = Prisma.BattleGetPayload<{
+  select: typeof SIMPLIFIED_SELECT;
+}>;
+
+const DEFAULT_LIST_TAKE = 100;
 
 @Injectable()
 export class BattleRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(
-    dto: QueryBattleDto,
-    skip: number,
-    take: number,
-  ): Promise<[BattleListItem[], number]> {
-    const { q, era, result, type, country, sortBy = 'date' } = dto;
-
-    const where: Prisma.BattleWhereInput = {
-      ...(q && {
-        OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          {
-            wars: {
-              some: { war: { name: { contains: q, mode: 'insensitive' } } },
-            },
-          },
-          { location: { name: { contains: q, mode: 'insensitive' } } },
-        ],
-      }),
-      ...(era && { era: { slug: era } }),
-      ...(result && { result }),
-      ...(type && { type: type }),
-      ...(country && {
-        location: { country: { contains: country, mode: 'insensitive' } },
-      }),
-    };
-
-    const orderBy: Prisma.BattleOrderByWithRelationInput =
-      sortBy === 'name' ? { name: 'asc' } : { date: 'asc' };
-
-    return this.prisma.$transaction([
-      this.prisma.battle.findMany({
-        where,
-        skip,
-        take,
-        orderBy,
-        include: BATTLE_LIST_INCLUDE,
-      }),
-      this.prisma.battle.count({ where }),
-    ]);
-  }
-
-  findByIdOrSlug(idOrSlug: string): Promise<BattleDetail | null> {
-    return this.prisma.battle.findFirst({
-      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
-      include: BATTLE_DETAIL_INCLUDE,
+  listar(): Promise<BattleSimplified[]> {
+    return this.prisma.battle.findMany({
+      select: SIMPLIFIED_SELECT,
+      orderBy: [{ date: 'asc' }, { dateStart: 'asc' }],
+      take: DEFAULT_LIST_TAKE,
     });
   }
 
-  findRelated(warIds: string[], excludeId: string): Promise<RelatedBattle[]> {
+  buscarPorNombre(nombre: string): Promise<BattleSimplified[]> {
+    return this.prisma.battle.findMany({
+      where: { name: { contains: nombre, mode: 'insensitive' } },
+      select: SIMPLIFIED_SELECT,
+      orderBy: { name: 'asc' },
+      take: DEFAULT_LIST_TAKE,
+    });
+  }
+
+  // Bounding box aproximada: 1° lat ≈ 111 km; 1° lng ≈ 111·cos(lat) km.
+  // Suficiente para filtros visuales en mapa; para precisión exacta usar
+  // PostGIS o earthdistance.
+  buscarPorCoordenadas(
+    lat: number,
+    lng: number,
+    radiusKm: number,
+  ): Promise<BattleSimplified[]> {
+    const dLat = radiusKm / 111;
+    const cos = Math.cos((lat * Math.PI) / 180);
+    const dLng = cos === 0 ? 180 : radiusKm / (111 * Math.abs(cos));
     return this.prisma.battle.findMany({
       where: {
-        wars: { some: { warId: { in: warIds } } },
-        NOT: { id: excludeId },
+        lat: { gte: lat - dLat, lte: lat + dLat },
+        lng: { gte: lng - dLng, lte: lng + dLng },
       },
-      take: 5,
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        date: true,
-        result: true,
-        type: true,
+      select: SIMPLIFIED_SELECT,
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  // Solapamiento: incluye batallas de un día dentro del rango y batallas
+  // con duración (dateStart..dateEnd) que se cruzan con el rango pedido.
+  buscarPorPeriodo(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<BattleSimplified[]> {
+    return this.prisma.battle.findMany({
+      where: {
+        OR: [
+          { date: { gte: startDate, lte: endDate } },
+          {
+            AND: [
+              { dateStart: { lte: endDate } },
+              { dateEnd: { gte: startDate } },
+            ],
+          },
+        ],
       },
+      select: SIMPLIFIED_SELECT,
+      orderBy: [{ date: 'asc' }, { dateStart: 'asc' }],
+    });
+  }
+
+  buscarPorGuerra(warId: string): Promise<BattleSimplified[]> {
+    return this.prisma.battle.findMany({
+      where: { wars: { some: { warId } } },
+      select: SIMPLIFIED_SELECT,
+      orderBy: [{ date: 'asc' }, { dateStart: 'asc' }],
+    });
+  }
+
+  buscarPorComandante(commanderId: string): Promise<BattleSimplified[]> {
+    return this.prisma.battle.findMany({
+      where: {
+        factions: {
+          some: {
+            commanders: { some: { commanderId } },
+          },
+        },
+      },
+      select: SIMPLIFIED_SELECT,
+      orderBy: [{ date: 'asc' }, { dateStart: 'asc' }],
+    });
+  }
+
+  // Acepta id o slug para soportar URLs amigables.
+  buscarPorId(id: string): Promise<BattleWithRelations | null> {
+    return this.prisma.battle.findFirst({
+      where: { OR: [{ id }, { slug: id }] },
+      include: BATTLE_DETAIL_INCLUDE,
     });
   }
 }

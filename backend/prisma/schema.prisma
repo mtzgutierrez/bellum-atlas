@@ -184,13 +184,17 @@ model BattleWar {
 
 
 // ─── RELACIÓN BATALLA ↔ FACCIÓN ──────────────────────────────────────────────
-// P710 de la batalla. `side` agrupa visualmente bandos enfrentados (1, 2...).
+// P710 de la batalla con qualifiers para fuerzas y bajas por bando.
+// `side` agrupa visualmente bandos enfrentados (1, 2...).
 model BattleFaction {
   id        String  @id @default(cuid())
   battleId  String
   factionId String
   side      Int?                                  // 1, 2... bandos enfrentados
   outcome   String?                               // "victoria", "derrota", "retirada"...
+  strength  Int?                                  // P1132 (qualifier): fuerzas en combate
+  deaths    Int?                                  // P1120 (qualifier): muertos del bando
+  injured   Int?                                  // P1339 (qualifier): heridos del bando
 
   battle     Battle  @relation(fields: [battleId],  references: [id], onDelete: Cascade)
   faction    Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
@@ -226,6 +230,9 @@ model WarFaction {
   factionId String
   side      Int?
   outcome   String?
+  strength  Int?                                  // P1132 (qualifier)
+  deaths    Int?                                  // P1120 (qualifier)
+  injured   Int?                                  // P1339 (qualifier)
 
   war     War     @relation(fields: [warId],     references: [id], onDelete: Cascade)
   faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)

@@ -13,7 +13,7 @@ services:
       PGADMIN_DEFAULT_PASSWORD: raul
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
-      - "5050:80"
+      - "5051:80"
     networks:
       - app-network
     depends_on:

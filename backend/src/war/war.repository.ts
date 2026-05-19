@@ -1,28 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { QueryWarDto } from './dto/query-war.dto';
-
-const WAR_LIST_INCLUDE = {
-  era: { select: { name: true, slug: true } },
-  location: { select: { name: true, country: true } },
-  _count: { select: { battles: true } },
-} satisfies Prisma.WarInclude;
 
 const WAR_DETAIL_INCLUDE = {
-  era: true,
-  location: true,
-  factions: {
-    include: {
-      commanders: {
-        include: {
-          commander: { select: { id: true, name: true, country: true } },
-        },
-      },
-    },
-  },
   battles: {
-    orderBy: { battle: { date: 'asc' as const } },
+    orderBy: [
+      { battle: { date: 'asc' as const } },
+      { battle: { dateStart: 'asc' as const } },
+    ],
     include: {
       battle: {
         select: {
@@ -30,48 +15,87 @@ const WAR_DETAIL_INCLUDE = {
           name: true,
           slug: true,
           date: true,
-          result: true,
-          type: true,
+          dateStart: true,
+          dateEnd: true,
         },
       },
     },
   },
-  media: {
-    orderBy: { order: 'asc' as const },
-    include: { media: true },
+  factions: {
+    orderBy: { side: 'asc' as const },
+    include: {
+      faction: {
+        select: { id: true, name: true, slug: true, flagUrl: true },
+      },
+    },
+  },
+  commanders: {
+    include: {
+      commander: { select: { id: true, name: true, slug: true } },
+    },
   },
 } satisfies Prisma.WarInclude;
 
-export type WarListItem = Prisma.WarGetPayload<{
-  include: typeof WAR_LIST_INCLUDE;
-}>;
-export type WarDetail = Prisma.WarGetPayload<{
+export type WarWithRelations = Prisma.WarGetPayload<{
   include: typeof WAR_DETAIL_INCLUDE;
 }>;
+
+const SIMPLIFIED_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  dateStart: true,
+  dateEnd: true,
+  imageUrl: true,
+  wikipediaUrl: true,
+} satisfies Prisma.WarSelect;
+
+export type WarSimplified = Prisma.WarGetPayload<{
+  select: typeof SIMPLIFIED_SELECT;
+}>;
+
+const DEFAULT_LIST_TAKE = 100;
 
 @Injectable()
 export class WarRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(dto: QueryWarDto, skip: number, take: number): Promise<[WarListItem[], number]> {
-    const where: Prisma.WarWhereInput = dto.q
-      ? {
-          OR: [
-            { name: { contains: dto.q, mode: 'insensitive' } },
-            { description: { contains: dto.q, mode: 'insensitive' } },
-          ],
-        }
-      : {};
-
-    return this.prisma.$transaction([
-      this.prisma.war.findMany({ where, skip, take, orderBy: { startDate: 'asc' }, include: WAR_LIST_INCLUDE }),
-      this.prisma.war.count({ where }),
-    ]);
+  listar(): Promise<WarSimplified[]> {
+    return this.prisma.war.findMany({
+      select: SIMPLIFIED_SELECT,
+      orderBy: { dateStart: 'asc' },
+      take: DEFAULT_LIST_TAKE,
+    });
   }
 
-  findByIdOrSlug(idOrSlug: string): Promise<WarDetail | null> {
+  buscarPorNombre(nombre: string): Promise<WarSimplified[]> {
+    return this.prisma.war.findMany({
+      where: { name: { contains: nombre, mode: 'insensitive' } },
+      select: SIMPLIFIED_SELECT,
+      orderBy: { name: 'asc' },
+      take: DEFAULT_LIST_TAKE,
+    });
+  }
+
+  // Solapamiento de rangos: una guerra "toca" el periodo pedido si su
+  // [dateStart, dateEnd] se cruza con [startDate, endDate]. Guerras sin
+  // fechas se descartan.
+  buscarPorPeriodo(startDate: Date, endDate: Date): Promise<WarSimplified[]> {
+    return this.prisma.war.findMany({
+      where: {
+        AND: [
+          { dateStart: { not: null, lte: endDate } },
+          { dateEnd: { not: null, gte: startDate } },
+        ],
+      },
+      select: SIMPLIFIED_SELECT,
+      orderBy: { dateStart: 'asc' },
+    });
+  }
+
+  buscarPorId(id: string): Promise<WarWithRelations | null> {
     return this.prisma.war.findFirst({
-      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      where: { OR: [{ id }, { slug: id }] },
       include: WAR_DETAIL_INCLUDE,
     });
   }
