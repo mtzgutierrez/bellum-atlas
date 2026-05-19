@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Battle, Commander, War } from '@prisma/client';
 
 /**
  * Servicio para llamar a la Api de Wikidata.
@@ -7,18 +8,37 @@ import { Injectable } from '@nestjs/common';
  */
 @Injectable()
 export class WikidataService {
-  async fetchAllBattles() {
-    // Aquí iría la lógica para consultar la API de Wikidata
-    // y obtener los datos de las batallas.
+  private readonly ENDPOINT = 'https://query.wikidata.org/sparql';
+  private readonly PAGE_SIZE = 500;
+
+  async fetchAllBattles(): Promise<Battle[]> {
+    const all: Battle[] = [];
+    let offset = 0;
+
+    while (true) {
+      const sparql = `
+            SELECT ?battle ?battleLabel ?warLabel ?start ?end ?locationLabel ?article WHERE {
+               
+
+            }
+        
+        `;
+    }
+
+    return all;
   }
 
-  async fetchAllWars() {
+  async fetchAllWars(): Promise<War[]> {
+    const all: War[] = [];
     // Aquí iría la lógica para consultar la API de Wikidata
     // y obtener los datos de las guerras.
+    return all;
   }
 
-  async fetchAllCommanders() {
+  async fetchAllCommanders(): Promise<Commander[]> {
+    const all: Commander[] = [];
     // Aquí iría la lógica para consultar la API de Wikidata
     // y obtener los datos de los comandantes.
+    return all;
   }
 }
