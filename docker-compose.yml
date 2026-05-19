@@ -34,6 +34,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: http://localhost:${FRONTEND_PORT:-5173}
+      SCRAPER_API_KEY: ${SCRAPER_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,9 +68,13 @@ services:
       DB_NAME: ${POSTGRES_DB}
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
+      BACKEND_URL: http://backend:3000
+      SCRAPER_API_KEY: ${SCRAPER_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
+      backend:
+        condition: service_started
     networks:
       - app-network
 

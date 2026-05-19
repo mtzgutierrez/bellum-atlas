@@ -48,7 +48,8 @@ export class WarService {
 
     return {
       ...war,
-      stats: { totalBattles, durationDays },
+      durationDays,
+      _count: { battles: totalBattles },
     };
   }
 }

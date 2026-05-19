@@ -22,6 +22,8 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # ── Development: código montado como volumen, spiders se lanzan manualmente ──
 FROM builder AS development
 
+RUN cp -rn /install/. /usr/local/
+
 WORKDIR /app
 
 COPY . .

@@ -83,8 +83,8 @@ export class ScraperRepository {
       } else {
         const faction = await tx.warFaction.upsert({
           where: { warId_side: { warId: entityId, side } },
-          create: { warId: entityId, side, belligerents, casualtiesRaw },
-          update: { belligerents, casualtiesRaw },
+          create: { warId: entityId, side, belligerents },
+          update: { belligerents },
         });
         factionId = faction.id;
       }

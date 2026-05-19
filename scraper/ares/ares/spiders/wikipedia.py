@@ -84,28 +84,22 @@ def _is_article_url(path: str) -> bool:
 
 class WikipediaSpider(scrapy.Spider):
     name = 'wikipedia'
-    allowed_domains = ['es.wikipedia.org', 'en.wikipedia.org']
+    allowed_domains = ['es.wikipedia.org']
 
     # ── Puntos de entrada ─────────────────────────────────────────────────────
     # Pueden ser URLs de artículo o de categoría.
     # Las categorías se rastrean recursivamente (hasta MAX_SUBCATEGORY_DEPTH).
 
     battle_start_urls = [
-        # Categorías españolas
         'https://es.wikipedia.org/wiki/Categor%C3%ADa:Batallas',
-        # Categorías inglesas
-        'https://en.wikipedia.org/wiki/Category:Battles_by_century',
-        'https://en.wikipedia.org/wiki/Category:Naval_battles',
     ]
 
     war_start_urls = [
-        'https://es.wikipedia.org/wiki/Categor%C3%ADa:Conflictos_armados',
-        'https://en.wikipedia.org/wiki/Category:Wars_by_century',
+        'https://es.wikipedia.org/wiki/Categor%C3%ADa:Guerras',
     ]
 
     commander_start_urls = [
-        'https://es.wikipedia.org/wiki/Categor%C3%ADa:Militares_de_Espa%C3%B1a',
-        'https://en.wikipedia.org/wiki/Category:Military_commanders',
+        'https://es.wikipedia.org/wiki/Categor%C3%ADa:Militares',
     ]
 
     # ── Bootstrap ─────────────────────────────────────────────────────────────
