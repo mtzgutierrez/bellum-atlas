@@ -1,295 +1,523 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useRef, useEffect, useCallback } from 'react'
-// @ts-expect-error
-import { feature } from 'topojson-client'
-import { TopBarDesktop } from '../components/TopBar'
-import BottomNav from '../components/BottomNav'
+import L from 'leaflet'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
+import SmartImage, { TYPE_LABEL } from '../components/SmartImage'
+import TypeIcon from '../components/TypeIcon'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { fetchBattles } from '../api/client'
-import type { ApiBattleListItem } from '../api/types'
-import { eras } from '../data/mock'
-import { useIsMobile } from '../hooks/useIsMobile'
-import styles from './MapExplorer.module.css'
+import { useDebounce } from '../hooks/useDebounce'
+import { battleService } from '../services/battle.service'
+import type { BattleSummary } from '../services/battle.types'
+import { formatYear } from '../utils/dates'
 
-const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
+const YEAR_MIN = -3000
+const YEAR_MAX = new Date().getFullYear()
 
-const W = 960
-const H = 480
-
-const eraLabels: Record<string, string> = {
-  all:          'Todas las eras',
-  ancient:      'Antigüedad',
-  medieval:     'Edad Media',
-  modern:       'Edad Moderna',
-  contemporary: 'Edad Contemporánea',
-}
-
-const typeLabels: Record<string, string> = {
-  land: 'Terrestre', naval: 'Naval', air: 'Aéreo', siege: 'Asedio', combined: 'Combinado',
-}
-
-function project(lon: number, lat: number): [number, number] {
-  const x = ((lon + 180) / 360) * W
-  const r = (lat * Math.PI) / 180
-  const y = ((1 - Math.log(Math.tan(Math.PI / 4 + r / 2)) / Math.PI) / 2) * H
-  return [x, y]
-}
-
-function geomToPath(geom: any): string {
-  const ring = (coords: number[][]): string =>
-    coords
-      .map((c, i) => {
-        const [x, y] = project(c[0], c[1])
-        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
-      })
-      .join('') + 'Z'
-
-  if (geom.type === 'Polygon')      return (geom.coordinates as number[][][]).map(ring).join('')
-  if (geom.type === 'MultiPolygon') return (geom.coordinates as number[][][][]).flatMap(p => p.map(ring)).join('')
-  return ''
-}
-
-type VB = { x: number; y: number; w: number; h: number }
-const INITIAL_VB: VB = { x: 0, y: 20, w: W, h: H - 40 }
-
-function WorldMap({
-  visible,
-  selected,
-  onSelect,
-}: {
-  visible: ApiBattleListItem[]
-  selected: ApiBattleListItem | null
-  onSelect: (b: ApiBattleListItem | null) => void
-}) {
-  const svgRef   = useRef<SVGSVGElement>(null)
-  const [paths, setPaths]       = useState<string[]>([])
-  const [vb, setVb]             = useState<VB>(INITIAL_VB)
-  const vbRef    = useRef(vb)
-  const dragRef  = useRef<{ startX: number; startY: number; vb: VB } | null>(null)
-  const touchRef = useRef<{ startX: number; startY: number; vb: VB } | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-
-  useEffect(() => { vbRef.current = vb }, [vb])
-
-  useEffect(() => {
-    fetch(GEO_URL)
-      .then(r => r.json())
-      .then(topo => {
-        const fc = feature(topo, topo.objects.countries) as any
-        setPaths((fc.features as any[]).map((f: any) => geomToPath(f.geometry)))
-      })
-  }, [])
-
-  useEffect(() => {
-    const el = svgRef.current
-    if (!el) return
-    const handler = (e: WheelEvent) => {
-      e.preventDefault()
-      const v    = vbRef.current
-      const rect = el.getBoundingClientRect()
-      const mx   = v.x + ((e.clientX - rect.left) / rect.width) * v.w
-      const my   = v.y + ((e.clientY - rect.top)  / rect.height) * v.h
-      const factor = e.deltaY > 0 ? 1.2 : 1 / 1.2
-      const nw   = Math.min(W * 4, Math.max(W / 8, v.w * factor))
-      const nh   = nw * (v.h / v.w)
-      setVb({ x: mx - (mx - v.x) * (nw / v.w), y: my - (my - v.y) * (nh / v.h), w: nw, h: nh })
-    }
-    el.addEventListener('wheel', handler, { passive: false })
-    return () => el.removeEventListener('wheel', handler)
-  }, [])
-
-  const onMouseDown = (e: React.MouseEvent) => {
-    dragRef.current = { startX: e.clientX, startY: e.clientY, vb: vbRef.current }
-    setIsDragging(true)
-  }
-  const onMouseMove = (e: React.MouseEvent) => {
-    if (!dragRef.current) return
-    const d    = dragRef.current
-    const rect = svgRef.current!.getBoundingClientRect()
-    const dx   = ((e.clientX - d.startX) / rect.width)  * d.vb.w
-    const dy   = ((e.clientY - d.startY) / rect.height) * d.vb.h
-    setVb({ ...d.vb, x: d.vb.x - dx, y: d.vb.y - dy })
-  }
-  const onMouseUp = () => { dragRef.current = null; setIsDragging(false) }
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 1)
-      touchRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, vb: vbRef.current }
-  }
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (!touchRef.current || e.touches.length !== 1) return
-    const d    = touchRef.current
-    const rect = svgRef.current!.getBoundingClientRect()
-    const dx   = ((e.touches[0].clientX - d.startX) / rect.width)  * d.vb.w
-    const dy   = ((e.touches[0].clientY - d.startY) / rect.height) * d.vb.h
-    setVb({ ...d.vb, x: d.vb.x - dx, y: d.vb.y - dy })
-  }
-  const onTouchEnd = () => { touchRef.current = null }
-
-  const zoom = W / vb.w
-
-  return (
-    <svg
-      ref={svgRef}
-      viewBox={`${vb.x.toFixed(2)} ${vb.y.toFixed(2)} ${vb.w.toFixed(2)} ${vb.h.toFixed(2)}`}
-      style={{
-        width: '100%', height: '100%', background: '#06090a',
-        cursor: isDragging ? 'grabbing' : 'grab',
-        display: 'block', userSelect: 'none', touchAction: 'none',
-      }}
-      onMouseDown={onMouseDown} onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}     onMouseLeave={onMouseUp}
-      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-    >
-      {paths.map((d, i) => (
-        <path key={i} d={d} fill="#0e1610" stroke="rgba(107,122,90,0.35)" strokeWidth={0.4 / zoom} />
-      ))}
-      {visible.map(b => {
-        const lat = b.location!.lat!
-        const lon = b.location!.lon!
-        const [cx, cy] = project(lon, lat)
-        const isSelected = selected?.id === b.id
-        return (
-          <g key={b.id} onClick={() => onSelect(isSelected ? null : b)} style={{ cursor: 'pointer' }}>
-            {isSelected && <circle cx={cx} cy={cy} r={14 / zoom} fill="rgba(212,160,23,0.15)" />}
-            <circle cx={cx} cy={cy} r={(isSelected ? 7 : 4) / zoom}
-              fill={isSelected ? '#D4A017' : '#B8860B'}
-              stroke="rgba(0,0,0,0.6)" strokeWidth={1 / zoom} />
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
-
-function useMapBattles(eraFilter: string) {
-  const fetcher = useCallback(
-    () => fetchBattles({ era: eraFilter === 'all' ? undefined : eraFilter, limit: 100 }),
-    [eraFilter],
-  )
-  const { data } = useApiFetch(fetcher, [eraFilter])
-  return (data?.data ?? []).filter(b => b.location?.lat != null && b.location?.lon != null)
-}
-
-export function MapExplorerDesktop() {
-  const [selected, setSelected] = useState<ApiBattleListItem | null>(null)
-  const [eraFilter, setEraFilter] = useState('all')
-  const visible = useMapBattles(eraFilter)
-
-  return (
-    <div className="ax-page">
-      <TopBarDesktop />
-      <div className={styles.mapWrapper}>
-        <WorldMap visible={visible} selected={selected} onSelect={setSelected} />
-
-        <div className={styles.eraBar}>
-          {['all', ...eras.map(e => e.key)].map(k => (
-            <button key={k} className={`ax-tag ${eraFilter === k ? 'active' : ''}`} onClick={() => setEraFilter(k)}>
-              {eraLabels[k]}
-            </button>
-          ))}
-        </div>
-
-        <div className={styles.battleCount}>
-          <div className={`ax-mono ${styles.battleCountLabel}`}>MOSTRANDO</div>
-          <div className={`ax-display ${styles.battleCountValue}`}>{visible.length}</div>
-          <div className={`ax-stat-label ${styles.battleCountSub}`}>batallas con coord.</div>
-          {eraFilter !== 'all' && (
-            <div className={`ax-mono ${styles.battleCountEra}`}>{eraLabels[eraFilter].toUpperCase()}</div>
-          )}
-        </div>
-
-        <div className={styles.hint}>
-          <div className={styles.hintList}>
-            <span>Scroll · Zoom</span>
-            <span>Arrastrar · Mover</span>
-            <span>Click pin · Detalle</span>
-          </div>
-        </div>
-
-        {selected && (
-          <div className={styles.popup}>
-            <button className={styles.popupClose} onClick={() => setSelected(null)}>
-              <Icon name="x" size={12} />
-            </button>
-            <div className={`ax-mono ${styles.popupEra}`}>
-              {selected.era?.name ?? '—'} · {typeLabels[selected.type?.toLowerCase() ?? ''] ?? selected.type}
-            </div>
-            <div className={`ax-display ${styles.popupName}`}>{selected.name}</div>
-            <div className={styles.popupWar}>{selected.wars[0]?.war.name ?? ''}</div>
-            <div className={`ax-mono ${styles.popupDate}`}>{selected.dateText ?? selected.date?.slice(0, 10) ?? ''}</div>
-            <div className={styles.popupPlace}>
-              {selected.location?.name}{selected.location?.country ? `, ${selected.location.country}` : ''}
-            </div>
-            {selected.result && (
-              <div className={styles.popupStats}>
-                <div>
-                  <div className={`ax-label ${styles.popupStatLabel}`}>Resultado</div>
-                  <div className={`ax-mono ${styles.popupStatValue}`}>{selected.result}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-export function MapExplorerMobile() {
-  const [selected, setSelected] = useState<ApiBattleListItem | null>(null)
-  const [eraFilter, setEraFilter] = useState('all')
-  const visible = useMapBattles(eraFilter)
-
-  return (
-    <div className="ax-page">
-      <div className={styles.mapWrapper}>
-        <WorldMap visible={visible} selected={selected} onSelect={setSelected} />
-
-        <div className={styles.mobileEraBar}>
-          {['all', ...eras.map(e => e.key)].map(k => (
-            <button
-              key={k}
-              className={`ax-tag ${eraFilter === k ? 'active' : ''}`}
-              style={{ whiteSpace: 'nowrap', fontSize: 10 }}
-              onClick={() => setEraFilter(k)}
-            >
-              {k === 'all' ? 'Todas' : eras.find(e => e.key === k)?.label}
-            </button>
-          ))}
-        </div>
-
-        <div className={styles.mobileBottom}>
-          {selected ? (
-            <div className={styles.mobileSelected}>
-              <div>
-                <div className={`ax-mono ${styles.mobileSelectedEra}`}>
-                  {(selected.era?.name ?? '').toUpperCase()} · {(selected.type ?? '').toUpperCase()}
-                </div>
-                <div className={`ax-display ${styles.mobileSelectedName}`}>{selected.name}</div>
-                <div className={`ax-mono ${styles.mobileSelectedMeta}`}>
-                  {selected.dateText ?? selected.date?.slice(0, 10)} · {selected.location?.name}
-                </div>
-              </div>
-              <button onClick={() => setSelected(null)} className="ax-btn ax-btn-ghost" style={{ padding: 8 }}>
-                <Icon name="x" size={14} />
-              </button>
-            </div>
-          ) : (
-            <div className={`ax-mono ${styles.mobileEmptyHint}`}>
-              {visible.length} BATALLAS · Toca un pin para ver detalles
-            </div>
-          )}
-        </div>
-      </div>
-      <BottomNav />
-    </div>
-  )
+interface Center {
+  lat: number
+  lng: number
 }
 
 export default function MapExplorer() {
-  const isMobile = useIsMobile()
-  return isMobile ? <MapExplorerMobile /> : <MapExplorerDesktop />
+  const navigate = useNavigate()
+  const [q, setQ] = useState('')
+  const [yearMin, setYearMin] = useState(YEAR_MIN)
+  const [yearMax, setYearMax] = useState(YEAR_MAX)
+  const [radiusOn, setRadiusOn] = useState(false)
+  const [radiusKm, setRadiusKm] = useState(500)
+  const [center, setCenter] = useState<Center | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+
+  const debouncedQ = useDebounce(q, 300)
+
+  // Selección del fetcher según los filtros activos.
+  const fetcher = useCallback(() => {
+    if (radiusOn && center) {
+      return battleService.buscarPorCoordenadas(
+        { latitude: center.lat, longitude: center.lng, radius: radiusKm },
+        { page, pageSize: 50 },
+      )
+    }
+    const text = debouncedQ.trim()
+    if (text.length >= 2) {
+      return battleService.buscarPorNombre(text, { page, pageSize: 50 })
+    }
+    if (yearMin !== YEAR_MIN || yearMax !== YEAR_MAX) {
+      return battleService.buscarPorPeriodo(
+        { startDate: isoStart(yearMin), endDate: isoEnd(yearMax) },
+        { page, pageSize: 50 },
+      )
+    }
+    return battleService.listar({ page, pageSize: 50 })
+  }, [debouncedQ, yearMin, yearMax, radiusOn, center, radiusKm, page])
+
+  const { data, loading } = useApiFetch(fetcher, [
+    debouncedQ,
+    yearMin,
+    yearMax,
+    radiusOn,
+    center?.lat,
+    center?.lng,
+    radiusKm,
+    page,
+  ])
+  const items = useMemo(() => data?.data ?? [], [data])
+  const meta = data?.meta
+
+  // ── Leaflet setup ──────────────────────────────────────────────────────
+  const mapRef = useRef<L.Map | null>(null)
+  const mapEl = useRef<HTMLDivElement | null>(null)
+  const layerRef = useRef<L.LayerGroup | null>(null)
+  const circleRef = useRef<L.Circle | null>(null)
+  const centerMarkerRef = useRef<L.Marker | null>(null)
+  const markersById = useRef<Map<string, L.Marker>>(new Map())
+
+  useEffect(() => {
+    if (mapRef.current || !mapEl.current) return
+    const map = L.map(mapEl.current, {
+      worldCopyJump: true,
+      zoomControl: true,
+      preferCanvas: true,
+      attributionControl: false,
+    }).setView([30, 10], 2)
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+      maxZoom: 18,
+      subdomains: 'abcd',
+    }).addTo(map)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+      maxZoom: 18,
+      subdomains: 'abcd',
+      pane: 'shadowPane',
+    }).addTo(map)
+
+    L.control
+      .attribution({ prefix: false, position: 'bottomright' })
+      .addAttribution(
+        '© <a href="https://www.openstreetmap.org/copyright">OSM</a> · © <a href="https://carto.com/attributions">CARTO</a>',
+      )
+      .addTo(map)
+
+    layerRef.current = L.layerGroup().addTo(map)
+    mapRef.current = map
+  }, [])
+
+  // Click en mapa: si modo radio, fija el centro.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const onClick = (e: L.LeafletMouseEvent) => {
+      if (!radiusOn) return
+      setCenter({ lat: e.latlng.lat, lng: e.latlng.lng })
+    }
+    map.on('click', onClick)
+    return () => {
+      map.off('click', onClick)
+    }
+  }, [radiusOn])
+
+  // Pinta pines cuando cambian los items o la selección.
+  useEffect(() => {
+    const map = mapRef.current
+    const layer = layerRef.current
+    if (!map || !layer) return
+    layer.clearLayers()
+    markersById.current.clear()
+
+    for (const b of items) {
+      if (b.latitude == null || b.longitude == null) continue
+      const icon = L.divIcon({
+        html: `<div class="battle-pin ${selectedId === b.id ? 'selected' : ''}"></div>`,
+        className: 'battle-pin-wrap',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      })
+      const marker = L.marker([b.latitude, b.longitude], { icon })
+        .bindPopup(buildPopup(b), {
+          className: 'ares-popup',
+          maxWidth: 260,
+          minWidth: 200,
+        })
+        .on('click', () => setSelectedId(b.id))
+      marker.addTo(layer)
+      markersById.current.set(b.id, marker)
+    }
+  }, [items, selectedId])
+
+  // Círculo de radio + marker del centro.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (circleRef.current) {
+      circleRef.current.remove()
+      circleRef.current = null
+    }
+    if (centerMarkerRef.current) {
+      centerMarkerRef.current.remove()
+      centerMarkerRef.current = null
+    }
+    if (radiusOn && center) {
+      circleRef.current = L.circle([center.lat, center.lng], {
+        radius: radiusKm * 1000,
+        color: '#C0392B',
+        weight: 1.5,
+        opacity: 0.9,
+        fillColor: '#C0392B',
+        fillOpacity: 0.08,
+      }).addTo(map)
+      centerMarkerRef.current = L.marker([center.lat, center.lng], {
+        icon: L.divIcon({
+          html: '<div style="width:14px;height:14px;border:2px solid #C0392B;background:#0d0d0d;transform:rotate(45deg)"></div>',
+          className: 'center-marker',
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        }),
+      }).addTo(map)
+    }
+  }, [radiusOn, center, radiusKm])
+
+  // Centra y abre popup del seleccionado.
+  useEffect(() => {
+    if (!selectedId) return
+    const map = mapRef.current
+    const marker = markersById.current.get(selectedId)
+    if (!map || !marker) return
+    map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 5), { duration: 0.6 })
+    marker.openPopup()
+  }, [selectedId])
+
+  // Reset filtros: limpia query/años/radio/centro y vuelve a la primera página.
+  const reset = () => {
+    setQ('')
+    setYearMin(YEAR_MIN)
+    setYearMax(YEAR_MAX)
+    setRadiusOn(false)
+    setCenter(null)
+    setRadiusKm(500)
+    setPage(1)
+  }
+
+  const hasFilters =
+    q.length > 0 ||
+    radiusOn ||
+    yearMin !== YEAR_MIN ||
+    yearMax !== YEAR_MAX
+
+  return (
+    <div className="map-page">
+      <aside className="map-sidebar">
+        <div className="map-filters">
+          <div className="filter-group">
+            <label className="filter-label">
+              <span>Buscar por nombre</span>
+              {q && (
+                <button className="btn-link" onClick={() => { setQ(''); setPage(1) }}>
+                  Limpiar
+                </button>
+              )}
+            </label>
+            <div className="input-with-icon">
+              <Icon name="search" size={16} />
+              <input
+                className="input"
+                type="text"
+                placeholder="Waterloo, Trafalgar, Stalingrado…"
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value)
+                  setPage(1)
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="filter-group">
+            <label className="filter-label">
+              <span>Periodo</span>
+              <span className="value">
+                {formatYearLabel(yearMin)} — {formatYearLabel(yearMax)}
+              </span>
+            </label>
+            <DualRange
+              min={YEAR_MIN}
+              max={YEAR_MAX}
+              valueMin={yearMin}
+              valueMax={yearMax}
+              onChange={(a, b) => {
+                setYearMin(a)
+                setYearMax(b)
+                setPage(1)
+              }}
+            />
+          </div>
+
+          <div className="filter-group">
+            <button
+              className={`radius-toggle ${radiusOn ? 'active' : ''}`}
+              onClick={() => {
+                setRadiusOn((v) => !v)
+                setPage(1)
+              }}
+            >
+              <span className="radius-toggle-icon">
+                <Icon name="crosshair" size={16} />
+              </span>
+              <span className="radius-toggle-text">
+                <strong>Búsqueda por radio</strong>
+                <small>
+                  {radiusOn
+                    ? center
+                      ? `Centro: ${center.lat.toFixed(2)}, ${center.lng.toFixed(2)}`
+                      : 'Pulsa en el mapa para fijar centro'
+                    : 'Filtra por distancia geográfica'}
+                </small>
+              </span>
+            </button>
+            {radiusOn && (
+              <div style={{ padding: '8px 0 0' }}>
+                <label className="filter-label">
+                  <span>Radio</span>
+                  <span className="value">{radiusKm.toLocaleString('es-ES')} km</span>
+                </label>
+                <input
+                  type="range"
+                  min={50}
+                  max={5000}
+                  step={50}
+                  value={radiusKm}
+                  onChange={(e) => {
+                    setRadiusKm(Number(e.target.value))
+                    setPage(1)
+                  }}
+                  style={{ width: '100%', accentColor: '#C0392B' }}
+                />
+                {center && (
+                  <button
+                    className="btn-link"
+                    onClick={() => setCenter(null)}
+                    style={{ marginTop: 6 }}
+                  >
+                    Quitar centro
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {hasFilters && (
+            <button className="btn-link" onClick={reset} style={{ alignSelf: 'flex-start' }}>
+              Restablecer filtros
+            </button>
+          )}
+        </div>
+
+        <div className="map-results">
+          <div className="map-results-header">
+            <span>Resultados</span>
+            <span>
+              {loading
+                ? '…'
+                : `${meta?.total.toLocaleString('es-ES') ?? 0} registro${meta?.total === 1 ? '' : 's'}`}
+            </span>
+          </div>
+          {!loading && items.length === 0 && (
+            <div
+              style={{
+                padding: '32px 16px',
+                textAlign: 'center',
+                color: 'var(--color-text-muted)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                letterSpacing: '0.1em',
+              }}
+            >
+              Sin registros para esta consulta.
+            </div>
+          )}
+          {items.map((b) => (
+            <div
+              key={b.id}
+              className={`map-result-item ${selectedId === b.id ? 'selected' : ''}`}
+              onClick={() => setSelectedId(b.id)}
+              onDoubleClick={() => navigate(`/battles/${b.slug}`)}
+            >
+              <div className="map-result-thumb">
+                <SmartImage src={b.imageUrl} alt={b.name} type={b.type} />
+              </div>
+              <div className="map-result-body">
+                <h4 className="map-result-name">{b.name}</h4>
+                <div className="map-result-meta">
+                  <span>{formatYear(b.date)}</span>
+                  <span className="dot">·</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <TypeIcon type={b.type} size={10} /> {b.type ? TYPE_LABEL[b.type] : '—'}
+                  </span>
+                  <span className="dot">·</span>
+                  <span>{b.country ?? '—'}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {meta && meta.totalPages > 1 && (
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                padding: 16,
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderTop: '1px solid var(--color-border)',
+              }}
+            >
+              <button
+                className="btn btn-ghost"
+                disabled={meta.page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                ←
+              </button>
+              <span
+                className="font-mono"
+                style={{ fontSize: 11, color: 'var(--color-text-muted)' }}
+              >
+                {meta.page} / {meta.totalPages}
+              </span>
+              <button
+                className="btn btn-ghost"
+                disabled={meta.page >= meta.totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                →
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <div className="map-canvas">
+        <div id="leaflet-map" ref={mapEl} />
+        {radiusOn && !center && (
+          <div className="radius-helper">
+            <span className="dot" />
+            Pulsa cualquier punto del mapa para fijar el centro
+          </div>
+        )}
+        <div className="map-legend" aria-hidden="true">
+          <div className="item">
+            <span className="swatch crimson" /> Batalla registrada
+          </div>
+          <div className="item" style={{ color: 'var(--color-text-muted)' }}>
+            Doble clic en un resultado: abre ficha
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── helpers ────────────────────────────────────────────────────────────────
+
+function buildPopup(b: BattleSummary): string {
+  const escape = (s: string | null) =>
+    (s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
+    )
+  const date = formatYear(b.date) ?? '—'
+  const loc = b.locationName ? `${b.locationName}${b.country ? `, ${b.country}` : ''}` : '—'
+  const type = b.type ? TYPE_LABEL[b.type] : '—'
+  return `
+    <div class="popup-content">
+      <div class="name">${escape(b.name)}</div>
+      <div class="meta">
+        <div>${escape(date)}</div>
+        <div>${escape(loc)}</div>
+        <div>${escape(type)}</div>
+      </div>
+      <a class="open-link" href="#/battles/${escape(b.slug)}">Abrir ficha →</a>
+    </div>`
+}
+
+function formatYearLabel(y: number): string {
+  if (y === 0) return '0'
+  if (y < 0) return `${Math.abs(y)} AC`
+  return String(y)
+}
+
+function isoStart(year: number): string {
+  return year < 0
+    ? `-${String(-year).padStart(6, '0')}-01-01T00:00:00.000Z`
+    : `${String(year).padStart(4, '0')}-01-01T00:00:00.000Z`
+}
+
+function isoEnd(year: number): string {
+  return year < 0
+    ? `-${String(-year).padStart(6, '0')}-12-31T23:59:59.999Z`
+    : `${String(year).padStart(4, '0')}-12-31T23:59:59.999Z`
+}
+
+// ── DualRange ──────────────────────────────────────────────────────────────
+
+function DualRange({
+  min,
+  max,
+  valueMin,
+  valueMax,
+  onChange,
+}: {
+  min: number
+  max: number
+  valueMin: number
+  valueMax: number
+  onChange: (a: number, b: number) => void
+}) {
+  const fill = {
+    left: `${((valueMin - min) / (max - min)) * 100}%`,
+    right: `${100 - ((valueMax - min) / (max - min)) * 100}%`,
+  }
+  const update = (which: 'a' | 'b', raw: string) => {
+    const v = Number.parseInt(raw, 10)
+    if (which === 'a') onChange(Math.min(v, valueMax - 1), valueMax)
+    else onChange(valueMin, Math.max(v, valueMin + 1))
+  }
+  return (
+    <div>
+      <div className="dual-range">
+        <div className="track">
+          <div className="fill" style={fill} />
+        </div>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={valueMin}
+          onChange={(e) => update('a', e.target.value)}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={valueMax}
+          onChange={(e) => update('b', e.target.value)}
+        />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 }}>
+        <input
+          className="input"
+          type="number"
+          value={valueMin}
+          onChange={(e) => update('a', e.target.value)}
+          style={{ fontFamily: 'var(--font-mono)', fontSize: 12, padding: '6px 8px' }}
+        />
+        <input
+          className="input"
+          type="number"
+          value={valueMax}
+          onChange={(e) => update('b', e.target.value)}
+          style={{ fontFamily: 'var(--font-mono)', fontSize: 12, padding: '6px 8px' }}
+        />
+      </div>
+    </div>
+  )
 }

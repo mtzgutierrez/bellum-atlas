@@ -1,259 +1,351 @@
-import { Link, useParams } from 'react-router-dom'
 import { useCallback } from 'react'
-import { TopBarDesktop, TopBarMobile } from '../components/TopBar'
-import BottomNav from '../components/BottomNav'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon'
-import FactionColumn from '../components/FactionColumn'
-import MapBackdrop from '../components/MapBackdrop'
-import BattleCard from '../components/BattleCard'
+import SmartImage, { TYPE_LABEL } from '../components/SmartImage'
 import TypeIcon from '../components/TypeIcon'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { fetchBattle } from '../api/client'
-import { useIsMobile } from '../hooks/useIsMobile'
-import type { ApiBattleListItem } from '../api/types'
-import styles from './BattleDetail.module.css'
+import { battleService } from '../services/battle.service'
+import type {
+  BattleDetail,
+  BattleFaction,
+  BattleType,
+} from '../services/battle.types'
+import { formatDateRange } from '../utils/dates'
 
-const typeLabels: Record<string, string> = {
-  land: 'Terrestre', naval: 'Naval', air: 'Aéreo', siege: 'Asedio', combined: 'Combinado',
-}
-
-function LoadingState() {
-  return (
-    <div style={{ padding: '64px 56px', color: 'var(--color-text-muted)', fontSize: 13 }}>
-      Cargando…
-    </div>
-  )
-}
-
-function ErrorState({ message }: { message: string }) {
-  return (
-    <div style={{ padding: '64px 56px', color: 'var(--color-text-muted)', fontSize: 13 }}>
-      {message}
-    </div>
-  )
-}
-
-export function BattleDetailDesktop() {
+export default function BattleDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const fetcher = useCallback(() => fetchBattle(id!), [id])
+  const navigate = useNavigate()
+  const fetcher = useCallback(() => battleService.detalle(id!), [id])
   const { data: battle, loading, error } = useApiFetch(fetcher, [id])
 
-  if (loading) return <div className="ax-page"><TopBarDesktop /><LoadingState /></div>
-  if (error || !battle) return <div className="ax-page"><TopBarDesktop /><ErrorState message={error ?? 'Batalla no encontrada'} /></div>
+  if (loading) {
+    return (
+      <main className="detail">
+        <div className="skeleton" style={{ height: 32, width: '40%', marginBottom: 24 }} />
+        <div className="skeleton" style={{ height: 64, width: '70%', marginBottom: 48 }} />
+        <div className="skeleton" style={{ height: 240, marginBottom: 48 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          <div className="skeleton" style={{ height: 240 }} />
+          <div className="skeleton" style={{ height: 240 }} />
+        </div>
+      </main>
+    )
+  }
+  if (error || !battle) {
+    return (
+      <main className="detail">
+        <div className="detail-breadcrumb">
+          <Link to="/battles">Catálogo</Link>
+          <Icon name="chevron-right" size={12} />
+          <span>—</span>
+        </div>
+        <h1 className="detail-title">Registro no encontrado.</h1>
+        <button className="btn btn-ghost" onClick={() => navigate('/battles')}>
+          Volver al catálogo
+        </button>
+      </main>
+    )
+  }
 
-  const warName = battle.wars[0]?.war.name ?? ''
-  const typeKey = battle.type?.toLowerCase() ?? 'land'
-  const dateDisplay = battle.dateText ?? battle.date?.slice(0, 10) ?? ''
-  const faction1 = battle.factions.find(f => f.side === 1)
-  const faction2 = battle.factions.find(f => f.side === 2)
+  return <Detail battle={battle} />
+}
 
-  const relatedAsListItems: ApiBattleListItem[] = battle.relatedBattles.map(rb => ({
-    ...rb,
-    dateText: rb.date?.slice(0, 10) ?? null,
-    era: battle.era,
-    location: null,
-    wars: battle.wars,
-  }))
+function Detail({ battle }: { battle: BattleDetail }) {
+  const type = battle.type as BattleType | null
+  const typeLabel = type ? TYPE_LABEL[type] : '—'
+  const war = battle.wars[0]
+  const sides = [...battle.factions].sort((a, b) => (a.side ?? 0) - (b.side ?? 0))
+  const [side1, side2] = [sides[0], sides[1]]
 
   return (
-    <div className="ax-page">
-      <TopBarDesktop />
-      <div className={styles.pageBody}>
-        <section className={styles.hero}>
-          <div className={`ax-mono ${styles.breadcrumb}`}>
-            <Link to="/battles" className={styles.breadcrumbLink}>Batallas</Link>
-            <Icon name="chevron-right" size={11} />
-            {warName && <><span className={styles.breadcrumbLink}>{warName}</span><Icon name="chevron-right" size={11} /></>}
-            <span>{battle.name}</span>
-          </div>
-          <div className={styles.heroLayout}>
-            <div>
-              <div className={styles.heroBadgeRow}>
-                <span className={styles.heroBattleType}>
-                  <TypeIcon type={battle.type} size={12} />
-                  {typeLabels[typeKey] ?? typeKey}
-                </span>
-              </div>
-              <h1 className={`ax-display ${styles.heroTitle}`}>
-                {battle.name.split(' ').slice(0, -1).join(' ')}<br />
-                <span className={styles.heroGold}>{battle.name.split(' ').slice(-1)[0]}</span>
-              </h1>
-              <div className={styles.heroMeta}>
-                <span className={styles.heroMetaItem}>
-                  <Icon name="calendar" size={14} color="var(--color-text-muted)" />
-                  <span className={`ax-mono ${styles.heroMetaDate}`}>{dateDisplay}</span>
-                </span>
-                {battle.location && (
-                  <span className={styles.heroMetaItem}>
-                    <Icon name="map-pin" size={14} color="var(--color-olive-bright)" />
-                    {battle.location.name}, {battle.location.country}
-                  </span>
-                )}
-                {warName && (
-                  <span className={styles.heroMetaItem}>
-                    <Icon name="book" size={14} color="var(--color-text-muted)" />
-                    {warName}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className={styles.miniMap}>
-              <MapBackdrop withGrid={false}>
-                <div className={styles.miniMapPin}>
-                  <div className={styles.miniMapDot} />
-                </div>
-              </MapBackdrop>
-              {battle.location?.lat != null && (
-                <div className={styles.miniMapFooter}>
-                  <span className={`ax-mono ${styles.miniMapCoords}`}>
-                    {battle.location.lat.toFixed(3)}°N · {battle.location.lon?.toFixed(3)}°E
-                  </span>
-                  <Link to="/map" className="ax-nav-link" style={{ fontSize: 10 }}>En el mapa →</Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className={styles.stats}>
-          {[
-            ['Resultado', battle.result ?? '—', ''],
-            ['Era', battle.era?.name ?? '—', 'período histórico'],
-            ['Lugar', battle.location?.name ?? '—', battle.location?.country ?? ''],
-            ...(faction1 ? [['Bajas bando 1', faction1.casualtiesRaw ?? '—', 'estimadas']] : []),
-            ...(faction2 ? [['Bajas bando 2', faction2.casualtiesRaw ?? '—', 'estimadas']] : []),
-          ].map(([l, v, s], i) => (
-            <div key={i} className={styles.statItem}>
-              <div className={`ax-stat-label ${styles.statLabel}`}>{l}</div>
-              <div className={`ax-display ${styles.statValue}`}>{v}</div>
-              <div className={`ax-mono ${styles.statSub}`}>{s}</div>
-            </div>
-          ))}
-        </section>
-
-        {(faction1 || faction2) && (
-          <section className={styles.factions}>
-            <div className={`ax-stamp ${styles.factionsStamp}`}>Bandos enfrentados</div>
-            <div className={styles.factionsGrid}>
-              {faction1 && (
-                <FactionColumn
-                  side="Bando 1"
-                  name={faction1.belligerents?.split(' | ')[0] ?? 'Bando 1'}
-                  members={faction1.belligerents?.split(' | ').slice(1) ?? []}
-                  commanders={faction1.commanders.map(c => c.commander.name)}
-                  forces={faction1.strength ?? '—'}
-                  casualties={faction1.casualtiesRaw ?? '—'}
-                  result={faction1.result ?? 'inconclusive'}
-                  accentColor="var(--color-text-primary)"
-                />
-              )}
-              {faction1 && faction2 && (
-                <div className={styles.vsDivider}>
-                  <div className={styles.vsLabel}>VS</div>
-                </div>
-              )}
-              {faction2 && (
-                <FactionColumn
-                  side="Bando 2"
-                  name={faction2.belligerents?.split(' | ')[0] ?? 'Bando 2'}
-                  members={faction2.belligerents?.split(' | ').slice(1) ?? []}
-                  commanders={faction2.commanders.map(c => c.commander.name)}
-                  forces={faction2.strength ?? '—'}
-                  casualties={faction2.casualtiesRaw ?? '—'}
-                  result={faction2.result ?? 'inconclusive'}
-                  accentColor="var(--color-text-muted)"
-                  alignRight
-                />
-              )}
-            </div>
-          </section>
+    <main className="detail">
+      <div className="detail-breadcrumb">
+        <Link to="/battles">Catálogo</Link>
+        <Icon name="chevron-right" size={12} />
+        {war && (
+          <>
+            <Link to={`/wars/${war.slug}`}>{war.name}</Link>
+            <Icon name="chevron-right" size={12} />
+          </>
         )}
-
-        {relatedAsListItems.length > 0 && (
-          <section className={styles.related}>
-            <div className={`ax-stamp ${styles.relatedStamp}`}>Otras batallas de {warName}</div>
-            <div className={styles.relatedGrid}>
-              {relatedAsListItems.map(b => <BattleCard key={b.id} battle={b} />)}
-            </div>
-          </section>
-        )}
+        <span style={{ color: 'var(--color-text-primary)' }}>{battle.name}</span>
       </div>
-    </div>
-  )
-}
 
-export function BattleDetailMobile() {
-  const { id } = useParams<{ id: string }>()
-  const fetcher = useCallback(() => fetchBattle(id!), [id])
-  const { data: battle, loading, error } = useApiFetch(fetcher, [id])
+      <header className="detail-header">
+        <div className="detail-eyebrow">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <TypeIcon type={type} size={12} /> {typeLabel}
+          </span>
+        </div>
+        <h1 className="detail-title">{battle.name}</h1>
+        <div className="detail-meta-row">
+          <span className="item">
+            <Icon name="calendar" />
+            <span className="font-mono">
+              {formatDateRange(battle.date, battle.dateStart, battle.dateEnd)}
+            </span>
+          </span>
+          {(battle.locationName || battle.country) && (
+            <span className="item">
+              <Icon name="map-pin" />
+              <span>{[battle.locationName, battle.country].filter(Boolean).join(', ')}</span>
+              {battle.latitude != null && battle.longitude != null && (
+                <span
+                  className="font-mono"
+                  style={{ color: 'var(--color-text-muted)', marginLeft: 6 }}
+                >
+                  ({battle.latitude.toFixed(2)}, {battle.longitude.toFixed(2)})
+                </span>
+              )}
+            </span>
+          )}
+          {war && (
+            <span className="item">
+              <Icon name="flag" />
+              <Link
+                to={`/wars/${war.slug}`}
+                style={{
+                  color: 'var(--color-text-primary)',
+                  borderBottom: '1px solid var(--color-border)',
+                }}
+              >
+                {war.name}
+              </Link>
+            </span>
+          )}
+        </div>
+      </header>
 
-  if (loading) return <div className="ax-page"><TopBarMobile /><LoadingState /><BottomNav /></div>
-  if (error || !battle) return <div className="ax-page"><TopBarMobile /><ErrorState message={error ?? 'Batalla no encontrada'} /><BottomNav /></div>
-
-  const dateDisplay = battle.dateText ?? battle.date?.slice(0, 10) ?? ''
-  const faction1 = battle.factions.find(f => f.side === 1)
-  const faction2 = battle.factions.find(f => f.side === 2)
-
-  return (
-    <div className="ax-page">
-      <TopBarMobile />
-      <div className={styles.pageBody}>
-        <section className={styles.mobileHero}>
-          <div className={styles.mobileBadgeRow}>
-            <TypeIcon type={battle.type} size={12} />
-          </div>
-          <h1 className={`ax-display ${styles.mobileTitle}`}>{battle.name}</h1>
-          <div className={`ax-mono ${styles.mobileMeta}`}>
-            {dateDisplay}{battle.location ? ` · ${battle.location.name}` : ''}
-          </div>
-        </section>
-
-        <section className={styles.mobileStats}>
-          <div className={styles.mobileStatsGrid}>
-            {[
-              ['Resultado', battle.result ?? '—'],
-              ['Era', battle.era?.name ?? '—'],
-              ['Guerra', battle.wars[0]?.war.name ?? '—'],
-              ['Lugar', battle.location?.name ?? '—'],
-            ].map(([l, v]) => (
-              <div key={l}>
-                <div className={`ax-label ${styles.mobileStatLabel}`}>{l}</div>
-                <div className={styles.mobileStatValue}>{v}</div>
-              </div>
+      {battle.summary && (
+        <section className="detail-outcome">
+          <div className="detail-outcome-eyebrow">Síntesis</div>
+          <div className="detail-outcome-body">
+            {battle.summary.split(/\n+/).map((p, i) => (
+              <p key={i}>{p}</p>
             ))}
           </div>
         </section>
+      )}
 
-        {(faction1 || faction2) && (
-          <section className={styles.mobileFactions}>
-            <div className={`ax-stamp ${styles.mobileFactionsStamp}`}>Bandos</div>
-            <div className={styles.mobileFactionList}>
-              {faction1 && (
-                <div className={styles.mobileFactionCard}>
-                  <div className={`ax-label ${styles.mobileFactionSide}`}>Bando 1</div>
-                  <div className={`ax-display ${styles.mobileFactionName}`}>
-                    {faction1.belligerents?.split(' | ')[0] ?? 'Bando 1'}
-                  </div>
-                </div>
-              )}
-              {faction2 && (
-                <div className={styles.mobileFactionCard}>
-                  <div className={`ax-label ${styles.mobileFactionSide}`}>Bando 2</div>
-                  <div className={`ax-display ${styles.mobileFactionName}`}>
-                    {faction2.belligerents?.split(' | ')[0] ?? 'Bando 2'}
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
+      <div className="detail-hero-media">
+        <SmartImage
+          src={battle.imageUrl}
+          alt={battle.name}
+          type={type}
+          label={typeLabel}
+        />
       </div>
-      <BottomNav />
+
+      <StatsRow battle={battle} />
+
+      {(side1 || side2) && (
+        <section className="detail-section">
+          <h2 className="detail-section-title">Bandos enfrentados</h2>
+          <div className="factions-grid">
+            <FactionColumn side={1} faction={side1} />
+            <FactionColumn side={2} faction={side2} />
+          </div>
+          {sides.length > 2 && (
+            <div className="detail-section" style={{ marginTop: 32 }}>
+              <h2 className="detail-section-title">Otros participantes</h2>
+              <div className="related-grid">
+                {sides.slice(2).map((f) => (
+                  <FactionMiniCard key={f.id} faction={f} />
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {battle.wikipediaUrl && (
+        <section className="detail-section">
+          <a
+            href={battle.wikipediaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-link"
+          >
+            Ver en Wikipedia <Icon name="external" size={12} />
+          </a>
+        </section>
+      )}
+    </main>
+  )
+}
+
+function StatsRow({ battle }: { battle: BattleDetail }) {
+  const items: Array<[string, string]> = [
+    ['País', battle.country ?? '—'],
+    [
+      'Muertos',
+      battle.deaths != null ? battle.deaths.toLocaleString('es-ES') : '—',
+    ],
+    [
+      'Bajas',
+      battle.casualties != null ? battle.casualties.toLocaleString('es-ES') : '—',
+    ],
+    [
+      'Coordenadas',
+      battle.latitude != null && battle.longitude != null
+        ? `${battle.latitude.toFixed(2)}, ${battle.longitude.toFixed(2)}`
+        : '—',
+    ],
+  ]
+  return (
+    <section
+      className="detail-section"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        border: '1px solid var(--color-border)',
+        background: 'var(--color-surface)',
+      }}
+    >
+      {items.map(([l, v], i) => (
+        <div
+          key={l}
+          style={{
+            padding: 24,
+            borderRight:
+              i < items.length - 1 ? '1px solid var(--color-border)' : 'none',
+          }}
+        >
+          <div
+            className="font-mono"
+            style={{
+              fontSize: 11,
+              color: 'var(--color-text-muted)',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              marginBottom: 6,
+            }}
+          >
+            {l}
+          </div>
+          <div className="font-display" style={{ fontSize: 22, fontWeight: 700 }}>
+            {v}
+          </div>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function FactionColumn({
+  side,
+  faction,
+}: {
+  side: number
+  faction: BattleFaction | undefined
+}) {
+  if (!faction) {
+    return (
+      <div className="faction-col">
+        <div className="faction-side">Bando {side}</div>
+        <p className="faction-belligerents" style={{ color: 'var(--color-text-muted)' }}>
+          —
+        </p>
+      </div>
+    )
+  }
+  const commanders = faction.commanders
+  return (
+    <div className="faction-col">
+      <div className="faction-side">Bando {faction.side ?? side}</div>
+      <h3 className="faction-belligerents">{faction.name}</h3>
+      <div className="faction-divider" />
+      <div className="faction-data">
+        <span className="label">Comandantes</span>
+      </div>
+      {commanders.length === 0 ? (
+        <p
+          style={{
+            color: 'var(--color-text-muted)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12,
+          }}
+        >
+          Sin nombres documentados.
+        </p>
+      ) : (
+        <ul className="faction-list">
+          {commanders.map((c) => (
+            <li key={c.id}>
+              <Link
+                to={`/commanders/${c.slug}`}
+                style={{
+                  color: 'inherit',
+                  borderBottom: '1px solid transparent',
+                  transition: 'border-color 150ms ease',
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.borderBottomColor = 'var(--color-border)')
+                }
+                onMouseLeave={(e) => (e.currentTarget.style.borderBottomColor = 'transparent')}
+              >
+                {c.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="faction-divider" />
+      <div className="faction-data">
+        <span className="label">Fuerzas</span>
+        <span className="value">
+          {faction.strength != null
+            ? faction.strength.toLocaleString('es-ES')
+            : 'Cifra no documentada'}
+        </span>
+      </div>
+      <div className="faction-data">
+        <span className="label">Muertos</span>
+        <span className="value">
+          {faction.deaths != null
+            ? faction.deaths.toLocaleString('es-ES')
+            : 'Cifra no documentada'}
+        </span>
+      </div>
+      <div className="faction-data">
+        <span className="label">Heridos</span>
+        <span className="value">
+          {faction.injured != null
+            ? faction.injured.toLocaleString('es-ES')
+            : 'Cifra no documentada'}
+        </span>
+      </div>
     </div>
   )
 }
 
-export default function BattleDetail() {
-  const isMobile = useIsMobile()
-  return isMobile ? <BattleDetailMobile /> : <BattleDetailDesktop />
+function FactionMiniCard({ faction }: { faction: BattleFaction }) {
+  return (
+    <article
+      style={{
+        border: '1px solid var(--color-border)',
+        background: 'var(--color-surface)',
+        padding: 16,
+      }}
+    >
+      <div className="faction-side">Bando {faction.side ?? '—'}</div>
+      <div
+        className="font-display"
+        style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}
+      >
+        {faction.name}
+      </div>
+      {faction.commanders.length > 0 && (
+        <ul className="faction-list" style={{ marginTop: 12 }}>
+          {faction.commanders.map((c) => (
+            <li key={c.id}>
+              <Link to={`/commanders/${c.slug}`} style={{ color: 'inherit' }}>
+                {c.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  )
 }

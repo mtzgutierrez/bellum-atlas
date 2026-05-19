@@ -1,52 +1,37 @@
-import { Link, useLocation } from "react-router-dom";
-import Logo from "./Logo";
-import Icon from "./Icon";
-import styles from "./TopBar.module.css";
+import { NavLink, Link, useLocation } from 'react-router-dom'
+import Icon from './Icon'
 
-const navLinks = [
-  { to: "/map", label: "Mapa" },
-  { to: "/battles", label: "Batallas" },
-  { to: "/wars", label: "Guerras" },
-  { to: "/commanders", label: "Comandantes" },
-  { to: "/timeline", label: "Cronología" },
-];
+const NAV = [
+  { to: '/', label: 'Inicio', exact: true },
+  { to: '/map', label: 'Mapa' },
+  { to: '/battles', label: 'Batallas' },
+  { to: '/wars', label: 'Guerras' },
+  { to: '/commanders', label: 'Comandantes' },
+]
 
-interface TopBarDesktopProps {
-  compact?: boolean;
-}
-
-export function TopBarDesktop({ compact = false }: TopBarDesktopProps) {
-  const location = useLocation();
+export default function TopBar() {
+  const location = useLocation()
   return (
-    <header className={`${styles.header} ${compact ? styles.compact : ""}`}>
-      <Link to="/" style={{ textDecoration: "none" }}>
-        <Logo />
+    <header className="topbar">
+      <Link to="/" className="topbar-brand">
+        <span className="mark">
+          <Icon name="swords" size={14} />
+        </span>
+        AresCodex
       </Link>
-      <nav className={styles.nav}>
-        {navLinks.map((L) => (
-          <Link
-            key={L.to}
-            to={L.to}
-            className={`ax-nav-link ${location.pathname.startsWith(L.to) ? "active" : ""}`}
-          >
-            {L.label}
-          </Link>
-        ))}
+      <nav className="topbar-nav">
+        {NAV.map((item) => {
+          const active = item.exact
+            ? location.pathname === item.to
+            : location.pathname === item.to ||
+              location.pathname.startsWith(item.to + '/')
+          return (
+            <NavLink key={item.to} to={item.to} className={active ? 'active' : ''}>
+              {item.label}
+            </NavLink>
+          )
+        })}
       </nav>
     </header>
-  );
-}
-
-export function TopBarMobile() {
-  return (
-    <header className={styles.headerMobile}>
-      <Link to="/" style={{ textDecoration: "none" }}>
-        <Logo size={16} />
-      </Link>
-      <div className={styles.mobileIcons}>
-        <Icon name="search" size={18} />
-        <Icon name="menu" size={18} />
-      </div>
-    </header>
-  );
+  )
 }

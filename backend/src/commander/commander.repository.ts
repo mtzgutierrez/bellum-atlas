@@ -44,70 +44,81 @@ export type CommanderSimplified = Prisma.CommanderGetPayload<{
   select: typeof SIMPLIFIED_SELECT;
 }>;
 
-const DEFAULT_LIST_TAKE = 100;
+type Page = { skip: number; take: number };
+type SortBy = 'name' | 'birth';
+
+function orderFor(sortBy: SortBy): Prisma.CommanderOrderByWithRelationInput[] {
+  if (sortBy === 'birth') return [{ birthDate: 'asc' }, { name: 'asc' }];
+  return [{ name: 'asc' }];
+}
 
 @Injectable()
 export class CommanderRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  listar(): Promise<CommanderSimplified[]> {
+  listar(page: Page, sortBy: SortBy = 'name'): Promise<CommanderSimplified[]> {
     return this.prisma.commander.findMany({
       select: SIMPLIFIED_SELECT,
-      orderBy: { name: 'asc' },
-      take: DEFAULT_LIST_TAKE,
+      orderBy: orderFor(sortBy),
+      ...page,
     });
   }
 
-  // Búsqueda no exacta sobre nombre y aliases. `aliases.has` exige match
-  // exacto en algún elemento del array → combinamos con `contains` sobre name
-  // para cubrir el caso parcial.
-  buscarPorNombre(nombre: string): Promise<CommanderSimplified[]> {
+  contar(): Promise<number> {
+    return this.prisma.commander.count();
+  }
+
+  buscarPorNombre(
+    nombre: string,
+    page: Page,
+    sortBy: SortBy = 'name',
+  ): Promise<CommanderSimplified[]> {
     return this.prisma.commander.findMany({
-      where: {
-        OR: [
-          { name: { contains: nombre, mode: 'insensitive' } },
-          { aliases: { has: nombre } },
-        ],
-      },
+      where: this.whereNombre(nombre),
       select: SIMPLIFIED_SELECT,
-      orderBy: { name: 'asc' },
-      take: DEFAULT_LIST_TAKE,
+      orderBy: orderFor(sortBy),
+      ...page,
     });
   }
 
-  buscarPorPais(pais: string): Promise<CommanderSimplified[]> {
+  contarPorNombre(nombre: string): Promise<number> {
+    return this.prisma.commander.count({ where: this.whereNombre(nombre) });
+  }
+
+  buscarPorPais(
+    pais: string,
+    page: Page,
+    sortBy: SortBy = 'name',
+  ): Promise<CommanderSimplified[]> {
     return this.prisma.commander.findMany({
-      where: {
-        nationality: { contains: pais, mode: 'insensitive' },
-      },
+      where: this.wherePais(pais),
       select: SIMPLIFIED_SELECT,
-      orderBy: { name: 'asc' },
-      take: DEFAULT_LIST_TAKE,
+      orderBy: orderFor(sortBy),
+      ...page,
     });
   }
 
-  // "Vivo entre dos años": [birthYear, deathYear] se solapa con [start, end].
-  // Aceptamos comandantes sin deathDate si nacieron antes/durante endYear.
+  contarPorPais(pais: string): Promise<number> {
+    return this.prisma.commander.count({ where: this.wherePais(pais) });
+  }
+
   buscarPorAnios(
     startYear: number,
     endYear: number,
+    page: Page,
+    sortBy: SortBy = 'birth',
   ): Promise<CommanderSimplified[]> {
-    const startBound = new Date(Date.UTC(startYear, 0, 1));
-    const endBound = new Date(Date.UTC(endYear, 11, 31, 23, 59, 59));
     return this.prisma.commander.findMany({
-      where: {
-        AND: [
-          { birthDate: { not: null, lte: endBound } },
-          {
-            OR: [
-              { deathDate: { gte: startBound } },
-              { deathDate: null },
-            ],
-          },
-        ],
-      },
+      where: this.whereAnios(startYear, endYear),
       select: SIMPLIFIED_SELECT,
-      orderBy: { birthDate: 'asc' },
+      orderBy: orderFor(sortBy),
+      ...page,
+    });
+  }
+
+  contarPorAnios(startYear: number, endYear: number): Promise<number> {
+    return this.prisma.commander.count({
+      where: this.whereAnios(startYear, endYear),
     });
   }
 
@@ -116,5 +127,33 @@ export class CommanderRepository {
       where: { OR: [{ id }, { slug: id }] },
       include: COMMANDER_DETAIL_INCLUDE,
     });
+  }
+
+  // Where helpers privados (reutilizados entre count y findMany).
+
+  private whereNombre(nombre: string): Prisma.CommanderWhereInput {
+    return {
+      OR: [
+        { name: { contains: nombre, mode: 'insensitive' } },
+        { aliases: { has: nombre } },
+      ],
+    };
+  }
+
+  private wherePais(pais: string): Prisma.CommanderWhereInput {
+    return { nationality: { contains: pais, mode: 'insensitive' } };
+  }
+
+  private whereAnios(startYear: number, endYear: number): Prisma.CommanderWhereInput {
+    const startBound = new Date(Date.UTC(startYear, 0, 1));
+    const endBound = new Date(Date.UTC(endYear, 11, 31, 23, 59, 59));
+    return {
+      AND: [
+        { birthDate: { not: null, lte: endBound } },
+        {
+          OR: [{ deathDate: { gte: startBound } }, { deathDate: null }],
+        },
+      ],
+    };
   }
 }

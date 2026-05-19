@@ -82,6 +82,7 @@ export class WikidataRepository {
       imageUrl: data.imageUrl,
       mapImageUrl: data.mapImageUrl,
       wikipediaUrl: data.wikipediaUrl,
+      type: data.type,
     };
 
     const battle = await this.prisma.battle.upsert({

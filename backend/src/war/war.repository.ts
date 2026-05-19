@@ -54,43 +54,52 @@ export type WarSimplified = Prisma.WarGetPayload<{
   select: typeof SIMPLIFIED_SELECT;
 }>;
 
-const DEFAULT_LIST_TAKE = 100;
+type Page = { skip: number; take: number };
 
 @Injectable()
 export class WarRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  listar(): Promise<WarSimplified[]> {
+  listar(page: Page): Promise<WarSimplified[]> {
     return this.prisma.war.findMany({
       select: SIMPLIFIED_SELECT,
       orderBy: { dateStart: 'asc' },
-      take: DEFAULT_LIST_TAKE,
+      ...page,
     });
   }
 
-  buscarPorNombre(nombre: string): Promise<WarSimplified[]> {
+  contar(): Promise<number> {
+    return this.prisma.war.count();
+  }
+
+  buscarPorNombre(nombre: string, page: Page): Promise<WarSimplified[]> {
     return this.prisma.war.findMany({
-      where: { name: { contains: nombre, mode: 'insensitive' } },
+      where: this.whereNombre(nombre),
       select: SIMPLIFIED_SELECT,
       orderBy: { name: 'asc' },
-      take: DEFAULT_LIST_TAKE,
+      ...page,
     });
   }
 
-  // Solapamiento de rangos: una guerra "toca" el periodo pedido si su
-  // [dateStart, dateEnd] se cruza con [startDate, endDate]. Guerras sin
-  // fechas se descartan.
-  buscarPorPeriodo(startDate: Date, endDate: Date): Promise<WarSimplified[]> {
+  contarPorNombre(nombre: string): Promise<number> {
+    return this.prisma.war.count({ where: this.whereNombre(nombre) });
+  }
+
+  buscarPorPeriodo(
+    startDate: Date,
+    endDate: Date,
+    page: Page,
+  ): Promise<WarSimplified[]> {
     return this.prisma.war.findMany({
-      where: {
-        AND: [
-          { dateStart: { not: null, lte: endDate } },
-          { dateEnd: { not: null, gte: startDate } },
-        ],
-      },
+      where: this.wherePeriodo(startDate, endDate),
       select: SIMPLIFIED_SELECT,
       orderBy: { dateStart: 'asc' },
+      ...page,
     });
+  }
+
+  contarPorPeriodo(startDate: Date, endDate: Date): Promise<number> {
+    return this.prisma.war.count({ where: this.wherePeriodo(startDate, endDate) });
   }
 
   buscarPorId(id: string): Promise<WarWithRelations | null> {
@@ -98,5 +107,18 @@ export class WarRepository {
       where: { OR: [{ id }, { slug: id }] },
       include: WAR_DETAIL_INCLUDE,
     });
+  }
+
+  private whereNombre(nombre: string): Prisma.WarWhereInput {
+    return { name: { contains: nombre, mode: 'insensitive' } };
+  }
+
+  private wherePeriodo(startDate: Date, endDate: Date): Prisma.WarWhereInput {
+    return {
+      AND: [
+        { dateStart: { not: null, lte: endDate } },
+        { dateEnd: { not: null, gte: startDate } },
+      ],
+    };
   }
 }

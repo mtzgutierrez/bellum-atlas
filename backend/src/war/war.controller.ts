@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -6,12 +6,18 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import {
+  Paginated,
+  PaginationQueryDto,
+  normalizePagination,
+} from '../common/pagination.dto';
+import {
   WarSimplified,
   WarWithRelations,
 } from './war.repository';
 import { WarService } from './war.service';
 import {
   GetWarsByTimePeriodDto,
+  PaginatedWarsDto,
   SimplifiedWarDto,
   WarBattleRefDto,
   WarCommanderRefDto,
@@ -25,34 +31,36 @@ export class WarController {
   constructor(private readonly service: WarService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar guerras (vista simplificada)' })
-  @ApiOkResponse({ type: [SimplifiedWarDto] })
-  async getAll(): Promise<SimplifiedWarDto[]> {
-    const guerras = await this.service.listar();
-    return guerras.map((w) => this.toSimplifiedDto(w));
+  @ApiOperation({ summary: 'Listar guerras (paginado, máx 50 por página)' })
+  @ApiOkResponse({ type: PaginatedWarsDto })
+  async getAll(@Query() q: PaginationQueryDto): Promise<PaginatedWarsDto> {
+    return this.mapPage(await this.service.listar(this.page(q)));
   }
 
   @Get('search/:name')
-  @ApiOperation({ summary: 'Buscar guerras por nombre' })
-  @ApiOkResponse({ type: [SimplifiedWarDto] })
+  @ApiOperation({ summary: 'Buscar guerras por nombre (paginado)' })
+  @ApiOkResponse({ type: PaginatedWarsDto })
   async searchByName(
     @Param('name') name: string,
-  ): Promise<SimplifiedWarDto[]> {
-    const guerras = await this.service.buscarPorNombre(name);
-    return guerras.map((w) => this.toSimplifiedDto(w));
+    @Query() q: PaginationQueryDto,
+  ): Promise<PaginatedWarsDto> {
+    return this.mapPage(await this.service.buscarPorNombre(name, this.page(q)));
   }
 
   @Post('time-period')
   @ApiOperation({ summary: 'Buscar guerras en un periodo de tiempo' })
-  @ApiOkResponse({ type: [SimplifiedWarDto] })
+  @ApiOkResponse({ type: PaginatedWarsDto })
   async getByTimePeriod(
     @Body() timePeriod: GetWarsByTimePeriodDto,
-  ): Promise<SimplifiedWarDto[]> {
-    const guerras = await this.service.buscarPorPeriodo(
-      new Date(timePeriod.startDate),
-      new Date(timePeriod.endDate),
+    @Query() q: PaginationQueryDto,
+  ): Promise<PaginatedWarsDto> {
+    return this.mapPage(
+      await this.service.buscarPorPeriodo(
+        new Date(timePeriod.startDate),
+        new Date(timePeriod.endDate),
+        this.page(q),
+      ),
     );
-    return guerras.map((w) => this.toSimplifiedDto(w));
   }
 
   @Get(':id')
@@ -60,8 +68,21 @@ export class WarController {
   @ApiOkResponse({ type: WarDto })
   @ApiNotFoundResponse({ description: 'Guerra no encontrada' })
   async getById(@Param('id') id: string): Promise<WarDto> {
-    const guerra = await this.service.buscarPorId(id);
-    return this.toDto(guerra);
+    return this.toDto(await this.service.buscarPorId(id));
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
+  private page(q: PaginationQueryDto): { page: number; pageSize: number } {
+    const { page, pageSize } = normalizePagination(q);
+    return { page, pageSize };
+  }
+
+  private mapPage(paged: Paginated<WarSimplified>): PaginatedWarsDto {
+    return {
+      data: paged.data.map((w) => this.toSimplifiedDto(w)),
+      meta: paged.meta,
+    };
   }
 
   // ── Mappers ─────────────────────────────────────────────────────────────

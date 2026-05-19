@@ -19,6 +19,8 @@ export type WikidataFactionInBattle = {
   commanders: WikidataRef[];
 };
 
+export type WikidataBattleType = 'LAND' | 'NAVAL' | 'AIR' | 'SIEGE' | 'MIXED';
+
 export type WikidataBattle = {
   wikidataId: string;
   name: string;
@@ -36,6 +38,7 @@ export type WikidataBattle = {
   imageUrl: string | null;
   mapImageUrl: string | null;
   wikipediaUrl: string | null;
+  type: WikidataBattleType | null;
   factions: WikidataFactionInBattle[];
   wars: WikidataRef[];
 };

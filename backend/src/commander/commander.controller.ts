@@ -1,10 +1,16 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import {
+  Paginated,
+  PaginationQueryDto,
+  normalizePagination,
+} from '../common/pagination.dto';
 import {
   CommanderSimplified,
   CommanderWithRelations,
@@ -16,8 +22,11 @@ import {
   CommanderRankDto,
   CommanderWarRefDto,
   GetCommandersByYearsDto,
+  PaginatedCommandersDto,
   SimplifiedCommanderDto,
 } from './dto/commander.dto';
+
+type SortBy = 'name' | 'birth';
 
 @ApiTags('Comandantes')
 @Controller('commander')
@@ -25,31 +34,44 @@ export class CommanderController {
   constructor(private readonly service: CommanderService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar comandantes (vista simplificada)' })
-  @ApiOkResponse({ type: [SimplifiedCommanderDto] })
-  async getAll(): Promise<SimplifiedCommanderDto[]> {
-    const comandantes = await this.service.listar();
-    return comandantes.map((c) => this.toSimplifiedDto(c));
+  @ApiOperation({ summary: 'Listar comandantes (paginado, máx 50 por página)' })
+  @ApiQuery({ name: 'sortBy', enum: ['name', 'birth'], required: false })
+  @ApiOkResponse({ type: PaginatedCommandersDto })
+  async getAll(
+    @Query() q: PaginationQueryDto,
+    @Query('sortBy') sortBy?: string,
+  ): Promise<PaginatedCommandersDto> {
+    return this.mapPage(
+      await this.service.listar(this.page(q), this.sort(sortBy)),
+    );
   }
 
   @Get('search/:name')
   @ApiOperation({ summary: 'Buscar comandantes por nombre o alias' })
-  @ApiOkResponse({ type: [SimplifiedCommanderDto] })
+  @ApiQuery({ name: 'sortBy', enum: ['name', 'birth'], required: false })
+  @ApiOkResponse({ type: PaginatedCommandersDto })
   async searchByName(
     @Param('name') name: string,
-  ): Promise<SimplifiedCommanderDto[]> {
-    const comandantes = await this.service.buscarPorNombre(name);
-    return comandantes.map((c) => this.toSimplifiedDto(c));
+    @Query() q: PaginationQueryDto,
+    @Query('sortBy') sortBy?: string,
+  ): Promise<PaginatedCommandersDto> {
+    return this.mapPage(
+      await this.service.buscarPorNombre(name, this.page(q), this.sort(sortBy)),
+    );
   }
 
   @Get('country/:country')
   @ApiOperation({ summary: 'Buscar comandantes por país (nacionalidad)' })
-  @ApiOkResponse({ type: [SimplifiedCommanderDto] })
+  @ApiQuery({ name: 'sortBy', enum: ['name', 'birth'], required: false })
+  @ApiOkResponse({ type: PaginatedCommandersDto })
   async getByCountry(
     @Param('country') country: string,
-  ): Promise<SimplifiedCommanderDto[]> {
-    const comandantes = await this.service.buscarPorPais(country);
-    return comandantes.map((c) => this.toSimplifiedDto(c));
+    @Query() q: PaginationQueryDto,
+    @Query('sortBy') sortBy?: string,
+  ): Promise<PaginatedCommandersDto> {
+    return this.mapPage(
+      await this.service.buscarPorPais(country, this.page(q), this.sort(sortBy)),
+    );
   }
 
   @Post('years')
@@ -57,15 +79,21 @@ export class CommanderController {
     summary:
       'Buscar comandantes vivos en algún momento del rango de años indicado',
   })
-  @ApiOkResponse({ type: [SimplifiedCommanderDto] })
+  @ApiQuery({ name: 'sortBy', enum: ['name', 'birth'], required: false })
+  @ApiOkResponse({ type: PaginatedCommandersDto })
   async getByYears(
     @Body() years: GetCommandersByYearsDto,
-  ): Promise<SimplifiedCommanderDto[]> {
-    const comandantes = await this.service.buscarPorAnios(
-      years.startYear,
-      years.endYear,
+    @Query() q: PaginationQueryDto,
+    @Query('sortBy') sortBy?: string,
+  ): Promise<PaginatedCommandersDto> {
+    return this.mapPage(
+      await this.service.buscarPorAnios(
+        years.startYear,
+        years.endYear,
+        this.page(q),
+        this.sort(sortBy),
+      ),
     );
-    return comandantes.map((c) => this.toSimplifiedDto(c));
   }
 
   @Get(':id')
@@ -75,8 +103,27 @@ export class CommanderController {
   @ApiOkResponse({ type: CommanderDto })
   @ApiNotFoundResponse({ description: 'Comandante no encontrado' })
   async getById(@Param('id') id: string): Promise<CommanderDto> {
-    const comandante = await this.service.buscarPorId(id);
-    return this.toDto(comandante);
+    return this.toDto(await this.service.buscarPorId(id));
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
+  private page(q: PaginationQueryDto): { page: number; pageSize: number } {
+    const { page, pageSize } = normalizePagination(q);
+    return { page, pageSize };
+  }
+
+  private sort(value: string | undefined): SortBy {
+    return value === 'birth' ? 'birth' : 'name';
+  }
+
+  private mapPage(
+    paged: Paginated<CommanderSimplified>,
+  ): PaginatedCommandersDto {
+    return {
+      data: paged.data.map((c) => this.toSimplifiedDto(c)),
+      meta: paged.meta,
+    };
   }
 
   // ── Mappers ─────────────────────────────────────────────────────────────

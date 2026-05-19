@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginationMetaDto } from '../../common/pagination.dto';
 
 // ─── DTOs auxiliares ───────────────────────────────────────────────────────
 
@@ -102,6 +103,13 @@ export class SimplifiedWarDto {
   imageUrl!: string | null;
   @ApiPropertyOptional({ nullable: true })
   wikipediaUrl!: string | null;
+}
+
+export class PaginatedWarsDto {
+  @ApiProperty({ type: [SimplifiedWarDto] })
+  data!: SimplifiedWarDto[];
+  @ApiProperty({ type: PaginationMetaDto })
+  meta!: PaginationMetaDto;
 }
 
 // ─── Inputs ────────────────────────────────────────────────────────────────

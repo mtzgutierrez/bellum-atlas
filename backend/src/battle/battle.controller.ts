@@ -1,10 +1,15 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import {
+  Paginated,
+  PaginationQueryDto,
+  normalizePagination,
+} from '../common/pagination.dto';
 import {
   BattleSimplified,
   BattleWithRelations,
@@ -17,6 +22,7 @@ import {
   BattleWarRefDto,
   GetBattlesByCoordinatesDto,
   GetBattlesByTimePeriodDto,
+  PaginatedBattlesDto,
   SimplifiedBattleDto,
 } from './dto/battle.dto';
 
@@ -26,85 +32,112 @@ export class BattleController {
   constructor(private readonly service: BattleService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar todas las batallas (vista simplificada)' })
-  @ApiOkResponse({ type: [SimplifiedBattleDto] })
-  async getAll(): Promise<SimplifiedBattleDto[]> {
-    const batallas = await this.service.listar();
-    return batallas.map((b) => this.toSimplifiedDto(b));
+  @ApiOperation({ summary: 'Listar batallas (paginado, máx 50 por página)' })
+  @ApiOkResponse({ type: PaginatedBattlesDto })
+  async getAll(@Query() q: PaginationQueryDto): Promise<PaginatedBattlesDto> {
+    return this.mapPage(await this.service.listar(this.page(q)));
   }
 
-  // ── Búsqueda y filtros ──────────────────────────────────────────────────
-
   @Get('search/:name')
-  @ApiOperation({ summary: 'Buscar batallas por nombre' })
-  @ApiOkResponse({ type: [SimplifiedBattleDto] })
+  @ApiOperation({ summary: 'Buscar batallas por nombre (paginado)' })
+  @ApiOkResponse({ type: PaginatedBattlesDto })
   async searchByName(
     @Param('name') name: string,
-  ): Promise<SimplifiedBattleDto[]> {
-    const batallas = await this.service.buscarPorNombre(name);
-    return batallas.map((b) => this.toSimplifiedDto(b));
+    @Query() q: PaginationQueryDto,
+  ): Promise<PaginatedBattlesDto> {
+    return this.mapPage(await this.service.buscarPorNombre(name, this.page(q)));
   }
 
   @Post('coordinates')
   @ApiOperation({
     summary: 'Buscar batallas dentro de un radio en torno a unas coordenadas',
   })
-  @ApiOkResponse({ type: [SimplifiedBattleDto] })
+  @ApiOkResponse({ type: PaginatedBattlesDto })
   async getByCoordinates(
     @Body() coordinates: GetBattlesByCoordinatesDto,
-  ): Promise<SimplifiedBattleDto[]> {
-    const batallas = await this.service.buscarPorCoordenadas(
-      coordinates.latitude,
-      coordinates.longitude,
-      coordinates.radius,
+    @Query() q: PaginationQueryDto,
+  ): Promise<PaginatedBattlesDto> {
+    return this.mapPage(
+      await this.service.buscarPorCoordenadas(
+        coordinates.latitude,
+        coordinates.longitude,
+        coordinates.radius,
+        this.page(q),
+      ),
     );
-    return batallas.map((b) => this.toSimplifiedDto(b));
   }
 
   @Post('time-period')
   @ApiOperation({ summary: 'Buscar batallas en un periodo de tiempo' })
-  @ApiOkResponse({ type: [SimplifiedBattleDto] })
+  @ApiOkResponse({ type: PaginatedBattlesDto })
   async getByTimePeriod(
     @Body() timePeriod: GetBattlesByTimePeriodDto,
-  ): Promise<SimplifiedBattleDto[]> {
-    const batallas = await this.service.buscarPorPeriodo(
-      new Date(timePeriod.startDate),
-      new Date(timePeriod.endDate),
+    @Query() q: PaginationQueryDto,
+  ): Promise<PaginatedBattlesDto> {
+    return this.mapPage(
+      await this.service.buscarPorPeriodo(
+        new Date(timePeriod.startDate),
+        new Date(timePeriod.endDate),
+        this.page(q),
+      ),
     );
-    return batallas.map((b) => this.toSimplifiedDto(b));
   }
 
-  // ── Entidades relacionadas ──────────────────────────────────────────────
-
   @Get('war/:warId')
-  @ApiOperation({ summary: 'Listar batallas de una guerra' })
-  @ApiOkResponse({ type: [SimplifiedBattleDto] })
+  @ApiOperation({ summary: 'Listar batallas de una guerra (paginado)' })
+  @ApiOkResponse({ type: PaginatedBattlesDto })
   async getByWarId(
     @Param('warId') warId: string,
-  ): Promise<SimplifiedBattleDto[]> {
-    const batallas = await this.service.buscarPorGuerra(warId);
-    return batallas.map((b) => this.toSimplifiedDto(b));
+    @Query() q: PaginationQueryDto,
+  ): Promise<PaginatedBattlesDto> {
+    return this.mapPage(await this.service.buscarPorGuerra(warId, this.page(q)));
   }
 
   @Get('commander/:commanderId')
-  @ApiOperation({ summary: 'Listar batallas en las que participó un comandante' })
-  @ApiOkResponse({ type: [SimplifiedBattleDto] })
+  @ApiOperation({
+    summary: 'Listar batallas en las que participó un comandante (paginado)',
+  })
+  @ApiOkResponse({ type: PaginatedBattlesDto })
   async getByCommanderId(
     @Param('commanderId') commanderId: string,
-  ): Promise<SimplifiedBattleDto[]> {
-    const batallas = await this.service.buscarPorComandante(commanderId);
-    return batallas.map((b) => this.toSimplifiedDto(b));
+    @Query() q: PaginationQueryDto,
+  ): Promise<PaginatedBattlesDto> {
+    return this.mapPage(
+      await this.service.buscarPorComandante(commanderId, this.page(q)),
+    );
   }
 
-  // ── Detalle ─────────────────────────────────────────────────────────────
+  @Get('random')
+  @ApiOperation({
+    summary: 'Batalla del día (estable durante 24h, sirve como presentación)',
+  })
+  @ApiOkResponse({ type: BattleDto })
+  async getRandom(): Promise<BattleDto> {
+    return this.toDto(await this.service.batallaDelDia());
+  }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener el detalle de una batalla por id o slug' })
   @ApiOkResponse({ type: BattleDto })
   @ApiNotFoundResponse({ description: 'Batalla no encontrada' })
   async getById(@Param('id') id: string): Promise<BattleDto> {
-    const batalla = await this.service.buscarPorId(id);
-    return this.toDto(batalla);
+    return this.toDto(await this.service.buscarPorId(id));
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
+  private page(q: PaginationQueryDto): { page: number; pageSize: number } {
+    const { page, pageSize } = normalizePagination(q);
+    return { page, pageSize };
+  }
+
+  private mapPage(
+    paged: Paginated<BattleSimplified>,
+  ): PaginatedBattlesDto {
+    return {
+      data: paged.data.map((b) => this.toSimplifiedDto(b)),
+      meta: paged.meta,
+    };
   }
 
   // ── Mappers ─────────────────────────────────────────────────────────────
@@ -119,6 +152,9 @@ export class BattleController {
     dto.dateEnd = b.dateEnd;
     dto.locationName = b.locationName;
     dto.country = b.country;
+    dto.latitude = b.lat;
+    dto.longitude = b.lng;
+    dto.type = b.type;
     dto.imageUrl = b.imageUrl;
     dto.wikipediaUrl = b.wikipediaUrl;
     return dto;
@@ -161,6 +197,9 @@ export class BattleController {
       f.flagUrl = bf.faction.flagUrl;
       f.side = bf.side;
       f.outcome = bf.outcome;
+      f.strength = bf.strength;
+      f.deaths = bf.deaths;
+      f.injured = bf.injured;
       f.commanders = bf.commanders.map((bfc) => ({
         id: bfc.commander.id,
         name: bfc.commander.name,

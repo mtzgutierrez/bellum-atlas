@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { WikidataRepository } from './wikidata.repository';
 import type {
   WikidataBattle,
+  WikidataBattleType,
   WikidataCommander,
   WikidataCommanderRank,
   WikidataFactionInBattle,
@@ -280,30 +281,38 @@ export class WikidataService {
     for (const r of rows) {
       const qid = qidFromUri(r.entity);
       if (!qid) continue;
-      const existing = cache.get(qid);
-      const coords = parseCoords(str(r.coords));
-      const candidate: WikidataBattle = existing ?? {
-        wikidataId: qid,
-        name: str(r.entityLabel) ?? qid,
-        description: str(r.description),
-        summary: null,
-        date: date(r.date),
-        dateStart: date(r.startTime),
-        dateEnd: date(r.endTime),
-        locationName: str(r.locationLabel),
-        country: str(r.countryLabel),
-        lat: coords?.lat ?? null,
-        lng: coords?.lng ?? null,
-        deaths: int(r.deaths),
-        casualties: int(r.casualties),
-        imageUrl: str(r.image),
-        mapImageUrl: str(r.mapImage),
-        wikipediaUrl: str(r.article),
-        factions: [],
-        wars: [],
-      };
-      // Si ya existía (fila duplicada por cartesianos), conserva la primera
-      if (!existing) cache.set(qid, candidate);
+      const instanceQid = qidFromUri(r.instance);
+      let existing = cache.get(qid);
+      if (!existing) {
+        const coords = parseCoords(str(r.coords));
+        existing = {
+          wikidataId: qid,
+          name: str(r.entityLabel) ?? qid,
+          description: str(r.description),
+          summary: null,
+          date: date(r.date),
+          dateStart: date(r.startTime),
+          dateEnd: date(r.endTime),
+          locationName: str(r.locationLabel),
+          country: str(r.countryLabel),
+          lat: coords?.lat ?? null,
+          lng: coords?.lng ?? null,
+          deaths: int(r.deaths),
+          casualties: int(r.casualties),
+          imageUrl: str(r.image),
+          mapImageUrl: str(r.mapImage),
+          wikipediaUrl: str(r.article),
+          type: classifyBattleType(instanceQid),
+          factions: [],
+          wars: [],
+        };
+        cache.set(qid, existing);
+      } else if (existing.type === null && instanceQid) {
+        // Una batalla puede tener varios P31; nos quedamos con el primero
+        // que clasifique a un tipo concreto.
+        const t = classifyBattleType(instanceQid);
+        if (t) existing.type = t;
+      }
     }
   }
 
@@ -526,6 +535,13 @@ export class WikidataService {
     if (!head) throw new Error(`Battle ${qid} no encontrada en Wikidata`);
 
     const coords = parseCoords(str(head.coords));
+    // Tipo: clasifica con el primer P31 conocido (puede haber varios)
+    let type: WikidataBattle['type'] = null;
+    for (const r of rows) {
+      const t = classifyBattleType(qidFromUri(r.instance));
+      if (t) { type = t; break; }
+    }
+
     const [factions, wars, summary] = await Promise.all([
       this.fetchFactionsOfBattle(qid),
       this.fetchWarsOfBattle(qid),
@@ -549,6 +565,7 @@ export class WikidataService {
       imageUrl: str(head.image),
       mapImageUrl: str(head.mapImage),
       wikipediaUrl: str(head.wikipediaUrl),
+      type,
       factions,
       wars,
     };
@@ -782,9 +799,10 @@ export class WikidataService {
     return `
       SELECT ?battleLabel ?description ?date ?startTime ?endTime
              ?locationLabel ?countryLabel ?coords ?image ?mapImage
-             ?deaths ?casualties ?wikipediaUrl
+             ?deaths ?casualties ?wikipediaUrl ?instance
       WHERE {
         BIND(wd:${qid} AS ?battle)
+        OPTIONAL { ?battle wdt:P31  ?instance. }
         OPTIONAL { ?battle wdt:P585 ?date. }
         OPTIONAL { ?battle wdt:P580 ?startTime. }
         OPTIONAL { ?battle wdt:P582 ?endTime. }
@@ -806,7 +824,6 @@ export class WikidataService {
         }
         SERVICE wikibase:label { bd:serviceParam wikibase:language ${LANGS}. }
       }
-      LIMIT 1
     `;
   }
 
@@ -966,9 +983,10 @@ export class WikidataService {
     return `
       SELECT ?entity ?entityLabel ?description ?date ?startTime ?endTime
              ?locationLabel ?countryLabel ?coords ?image ?mapImage
-             ?deaths ?casualties ?article
+             ?deaths ?casualties ?article ?instance
       WHERE {
         VALUES ?entity { ${qidValues(qids)} }
+        OPTIONAL { ?entity wdt:P31 ?instance. }
         OPTIONAL { ?entity wdt:P585 ?date. }
         OPTIONAL { ?entity wdt:P580 ?startTime. }
         OPTIONAL { ?entity wdt:P582 ?endTime. }
@@ -1210,4 +1228,23 @@ function parseCoords(
 
 function unique<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
+}
+
+// Wikidata expresa el tipo de batalla por su P31 (instance of). Mapeamos las
+// clases más habituales a nuestro enum. Cuando no podemos clasificar devuelve
+// null y dejamos que el front muestre "—"; no inventamos un tipo por defecto.
+const BATTLE_TYPE_BY_QID: Record<string, WikidataBattleType> = {
+  Q2334719: 'NAVAL',  // naval battle
+  Q1261499: 'NAVAL',  // sea battle
+  Q1071985: 'AIR',    // dogfight
+  Q40231: 'AIR',      // aerial warfare
+  Q188055: 'SIEGE',   // siege
+  Q1378139: 'SIEGE',  // blockade
+  Q645883: 'LAND',    // military operation (usually land)
+  Q178561: 'LAND',    // battle (genérico → asumimos terrestre)
+};
+
+function classifyBattleType(instanceQid: string): WikidataBattleType | null {
+  if (!instanceQid) return null;
+  return BATTLE_TYPE_BY_QID[instanceQid] ?? null;
 }

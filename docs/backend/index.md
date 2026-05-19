@@ -33,13 +33,7 @@ backend/src/
 │   └── ...
 ├── locations/
 │   └── ...
-├── auth/
-│   ├── auth.module.ts
-│   ├── auth.controller.ts       # POST /auth/register, POST /auth/login
-│   └── jwt.strategy.ts
-└── internal/
-    └── scraper/
-        └── scraper.controller.ts  # POST /internal/scraper/battle
+
 ```
 
 ---

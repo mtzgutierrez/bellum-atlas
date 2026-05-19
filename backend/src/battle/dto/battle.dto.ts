@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginationMetaDto } from '../../common/pagination.dto';
 
 // ─── DTOs auxiliares ────────────────────────────────────────────────────────
 
@@ -33,6 +34,12 @@ export class BattleFactionDto {
   side!: number | null;
   @ApiPropertyOptional({ nullable: true })
   outcome!: string | null;
+  @ApiPropertyOptional({ nullable: true })
+  strength!: number | null;
+  @ApiPropertyOptional({ nullable: true })
+  deaths!: number | null;
+  @ApiPropertyOptional({ nullable: true })
+  injured!: number | null;
   @ApiProperty({ type: [BattleCommanderRefDto] })
   commanders!: BattleCommanderRefDto[];
 }
@@ -104,6 +111,8 @@ export class BattleDto {
 
 /**
  * Datos simplificados de una batalla, para listados y vistas previas.
+ * Incluye `lat`/`lng` y `type` para que el mapa pueda pintar los pines
+ * y la card pueda mostrar el icono de tipo sin pedir el detalle.
  */
 export class SimplifiedBattleDto {
   @ApiProperty()
@@ -123,12 +132,25 @@ export class SimplifiedBattleDto {
   @ApiPropertyOptional({ nullable: true })
   country!: string | null;
   @ApiPropertyOptional({ nullable: true })
+  latitude!: number | null;
+  @ApiPropertyOptional({ nullable: true })
+  longitude!: number | null;
+  @ApiPropertyOptional({ nullable: true })
+  type!: string | null;
+  @ApiPropertyOptional({ nullable: true })
   imageUrl!: string | null;
   @ApiPropertyOptional({ nullable: true })
   wikipediaUrl!: string | null;
 }
 
 // ─── Inputs ────────────────────────────────────────────────────────────────
+
+export class PaginatedBattlesDto {
+  @ApiProperty({ type: [SimplifiedBattleDto] })
+  data!: SimplifiedBattleDto[];
+  @ApiProperty({ type: PaginationMetaDto })
+  meta!: PaginationMetaDto;
+}
 
 export class GetBattlesByCoordinatesDto {
   @ApiProperty({ description: 'Latitud del centro de búsqueda (WGS84)' })

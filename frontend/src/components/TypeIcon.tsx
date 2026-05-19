@@ -1,20 +1,20 @@
+import type { BattleType } from '../services/battle.types'
 import Icon from './Icon'
 
-const typeIconMap: Record<string, string> = {
-  land: 'sword',
-  naval: 'anchor',
-  air: 'plane',
-  siege: 'castle',
-  combined: 'shield',
+const NAME: Record<BattleType, string> = {
+  LAND: 'swords',
+  NAVAL: 'anchor',
+  AIR: 'plane',
+  SIEGE: 'castle',
+  MIXED: 'flag',
 }
 
-interface TypeIconProps {
-  type: string | null | undefined
+export default function TypeIcon({
+  type,
+  size = 14,
+}: {
+  type: BattleType | null
   size?: number
-  color?: string
-}
-
-export default function TypeIcon({ type, size = 14, color }: TypeIconProps) {
-  const key = type?.toLowerCase() ?? 'land'
-  return <Icon name={typeIconMap[key] ?? 'sword'} size={size} color={color} />
+}) {
+  return <Icon name={type ? NAME[type] : 'flag'} size={size} />
 }
