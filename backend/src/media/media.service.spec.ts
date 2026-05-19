@@ -155,16 +155,12 @@ describe('MediaService', () => {
       expect(result).toEqual({ data: [], total: 0 });
     });
 
-    it('edge: filtering by source passes the where clause to repository', async () => {
+    it('edge: filtering by source is forwarded to repository', async () => {
       repo.findAll.mockResolvedValue([[MEDIA_STUB], 1]);
 
       await service.findAll({ source: MediaSource.CUSTOM });
 
-      expect(repo.findAll).toHaveBeenCalledWith(
-        { source: MediaSource.CUSTOM },
-        0,
-        20,
-      );
+      expect(repo.findAll).toHaveBeenCalledWith(MediaSource.CUSTOM, 0, 20);
     });
   });
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { BattleType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { QueryBattleDto } from './dto/query-battle.dto';
 
 const BATTLE_LIST_INCLUDE = {
   era: { select: { name: true, slug: true } },
@@ -36,8 +37,12 @@ const BATTLE_DETAIL_INCLUDE = {
   },
 } satisfies Prisma.BattleInclude;
 
-export type BattleListItem = Prisma.BattleGetPayload<{ include: typeof BATTLE_LIST_INCLUDE }>;
-export type BattleDetail = Prisma.BattleGetPayload<{ include: typeof BATTLE_DETAIL_INCLUDE }>;
+export type BattleListItem = Prisma.BattleGetPayload<{
+  include: typeof BATTLE_LIST_INCLUDE;
+}>;
+export type BattleDetail = Prisma.BattleGetPayload<{
+  include: typeof BATTLE_DETAIL_INCLUDE;
+}>;
 export type RelatedBattle = {
   id: string;
   name: string;
@@ -52,22 +57,52 @@ export class BattleRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   findAll(
-    where: Prisma.BattleWhereInput,
-    orderBy: Prisma.BattleOrderByWithRelationInput,
+    dto: QueryBattleDto,
     skip: number,
     take: number,
   ): Promise<[BattleListItem[], number]> {
+    const { q, era, result, type, country, sortBy = 'date' } = dto;
+
+    const where: Prisma.BattleWhereInput = {
+      ...(q && {
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          {
+            wars: {
+              some: { war: { name: { contains: q, mode: 'insensitive' } } },
+            },
+          },
+          { location: { name: { contains: q, mode: 'insensitive' } } },
+        ],
+      }),
+      ...(era && { era: { slug: era } }),
+      ...(result && { result }),
+      ...(type && { type: type }),
+      ...(country && {
+        location: { country: { contains: country, mode: 'insensitive' } },
+      }),
+    };
+
+    const orderBy: Prisma.BattleOrderByWithRelationInput =
+      sortBy === 'name' ? { name: 'asc' } : { date: 'asc' };
+
     return this.prisma.$transaction([
-      this.prisma.battle.findMany({ where, skip, take, orderBy, include: BATTLE_LIST_INCLUDE }),
+      this.prisma.battle.findMany({
+        where,
+        skip,
+        take,
+        orderBy,
+        include: BATTLE_LIST_INCLUDE,
+      }),
       this.prisma.battle.count({ where }),
-    ]) as Promise<[BattleListItem[], number]>;
+    ]);
   }
 
   findByIdOrSlug(idOrSlug: string): Promise<BattleDetail | null> {
     return this.prisma.battle.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
       include: BATTLE_DETAIL_INCLUDE,
-    }) as Promise<BattleDetail | null>;
+    });
   }
 
   findRelated(warIds: string[], excludeId: string): Promise<RelatedBattle[]> {
@@ -77,7 +112,14 @@ export class BattleRepository {
         NOT: { id: excludeId },
       },
       take: 5,
-      select: { id: true, name: true, slug: true, date: true, result: true, type: true },
-    }) as Promise<RelatedBattle[]>;
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        date: true,
+        result: true,
+        type: true,
+      },
+    });
   }
 }

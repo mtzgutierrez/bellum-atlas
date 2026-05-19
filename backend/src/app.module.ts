@@ -8,6 +8,7 @@ import { WarModule } from './war/war.module';
 import { CommanderModule } from './commander/commander.module';
 import { ScraperModule } from './scraper/scraper.module';
 import { MediaModule } from './media/media.module';
+import { WikidataModule } from './wikidata/wikidata.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { MediaModule } from './media/media.module';
     CommanderModule,
     ScraperModule,
     MediaModule,
+    WikidataModule,
   ],
   controllers: [HealthController],
 })

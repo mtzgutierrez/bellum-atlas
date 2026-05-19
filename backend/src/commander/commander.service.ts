@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { CommanderRepository } from './commander.repository';
 import { QueryCommanderDto } from './dto/query-commander.dto';
 import {
@@ -13,15 +12,8 @@ export class CommanderService {
   constructor(private readonly commanderRepository: CommanderRepository) {}
 
   async findAll(dto: QueryCommanderDto): Promise<PaginatedResult<unknown>> {
-    const { q } = dto;
     const { page, limit, skip, take } = normalisePagination(dto.page, dto.limit);
-
-    const where: Prisma.CommanderWhereInput = q
-      ? { name: { contains: q, mode: 'insensitive' } }
-      : {};
-
-    const [data, total] = await this.commanderRepository.findAll(where, skip, take);
-
+    const [data, total] = await this.commanderRepository.findAll(dto, skip, take);
     return { data, meta: buildMeta(total, page, limit) };
   }
 
@@ -32,7 +24,6 @@ export class CommanderService {
       throw new NotFoundException(`Comandante con id "${id}" no encontrado`);
     }
 
-    // Build flat battle history from CommanderBattleFaction
     const battles = commander.battles.map((cbf) => ({
       id: cbf.battleFaction.battle.id,
       name: cbf.battleFaction.battle.name,

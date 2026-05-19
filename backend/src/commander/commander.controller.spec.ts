@@ -3,6 +3,8 @@ import { NotFoundException } from '@nestjs/common';
 import { CommanderController } from './commander.controller';
 import { CommanderService } from './commander.service';
 
+jest.mock('@prisma/client', () => ({ PrismaClient: jest.fn(), Prisma: {} }));
+
 const PAGINATED_STUB = {
   data: [{ id: 'cmd-1', name: 'Arthur Wellesley' }],
   meta: { total: 1, page: 1, limit: 20, totalPages: 1 },

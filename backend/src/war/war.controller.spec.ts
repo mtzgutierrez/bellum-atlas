@@ -3,6 +3,8 @@ import { NotFoundException } from '@nestjs/common';
 import { WarController } from './war.controller';
 import { WarService } from './war.service';
 
+jest.mock('@prisma/client', () => ({ PrismaClient: jest.fn(), Prisma: {} }));
+
 const PAGINATED_STUB = {
   data: [{ id: 'war-1', name: 'Guerras Napoleónicas' }],
   meta: { total: 1, page: 1, limit: 20, totalPages: 1 },

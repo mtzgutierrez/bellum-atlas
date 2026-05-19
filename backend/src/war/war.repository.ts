@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { QueryWarDto } from './dto/query-war.dto';
 
 const WAR_LIST_INCLUDE = {
   era: { select: { name: true, slug: true } },
@@ -41,34 +42,37 @@ const WAR_DETAIL_INCLUDE = {
   },
 } satisfies Prisma.WarInclude;
 
-export type WarListItem = Prisma.WarGetPayload<{ include: typeof WAR_LIST_INCLUDE }>;
-export type WarDetail = Prisma.WarGetPayload<{ include: typeof WAR_DETAIL_INCLUDE }>;
+export type WarListItem = Prisma.WarGetPayload<{
+  include: typeof WAR_LIST_INCLUDE;
+}>;
+export type WarDetail = Prisma.WarGetPayload<{
+  include: typeof WAR_DETAIL_INCLUDE;
+}>;
 
 @Injectable()
 export class WarRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(
-    where: Prisma.WarWhereInput,
-    skip: number,
-    take: number,
-  ): Promise<[WarListItem[], number]> {
+  findAll(dto: QueryWarDto, skip: number, take: number): Promise<[WarListItem[], number]> {
+    const where: Prisma.WarWhereInput = dto.q
+      ? {
+          OR: [
+            { name: { contains: dto.q, mode: 'insensitive' } },
+            { description: { contains: dto.q, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+
     return this.prisma.$transaction([
-      this.prisma.war.findMany({
-        where,
-        skip,
-        take,
-        orderBy: { startDate: 'asc' },
-        include: WAR_LIST_INCLUDE,
-      }),
+      this.prisma.war.findMany({ where, skip, take, orderBy: { startDate: 'asc' }, include: WAR_LIST_INCLUDE }),
       this.prisma.war.count({ where }),
-    ]) as Promise<[WarListItem[], number]>;
+    ]);
   }
 
   findByIdOrSlug(idOrSlug: string): Promise<WarDetail | null> {
     return this.prisma.war.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
       include: WAR_DETAIL_INCLUDE,
-    }) as Promise<WarDetail | null>;
+    });
   }
 }

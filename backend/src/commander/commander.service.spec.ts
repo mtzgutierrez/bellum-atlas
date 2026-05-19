@@ -3,6 +3,11 @@ import { NotFoundException } from '@nestjs/common';
 import { CommanderService } from './commander.service';
 import { CommanderRepository } from './commander.repository';
 
+jest.mock('@prisma/client', () => ({
+  PrismaClient: jest.fn(),
+  Prisma: {},
+}));
+
 // ─── Stubs ────────────────────────────────────────────────────────────────────
 
 const COMMANDER_STUB = {

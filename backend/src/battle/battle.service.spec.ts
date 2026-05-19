@@ -99,8 +99,7 @@ describe('BattleService', () => {
 
       await service.findAll({ limit: 9999 });
 
-      // Repository was called with take capped at 100
-      const [, , , take] = repo.findAll.mock.calls[0];
+      const [, , take] = repo.findAll.mock.calls[0];
       expect(take).toBe(100);
     });
 
@@ -112,13 +111,13 @@ describe('BattleService', () => {
       expect(result.meta.page).toBe(1);
     });
 
-    it('edge: sortBy=name uses name:asc ordering', async () => {
+    it('edge: sortBy=name is forwarded to repository', async () => {
       repo.findAll.mockResolvedValue([[BATTLE_STUB], 1]);
 
       await service.findAll({ sortBy: 'name' });
 
-      const [, orderBy] = repo.findAll.mock.calls[0];
-      expect(orderBy).toEqual({ name: 'asc' });
+      const [dto] = repo.findAll.mock.calls[0];
+      expect(dto.sortBy).toBe('name');
     });
 
     it('error: DB error propagates as-is', async () => {

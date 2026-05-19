@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Media, Prisma } from '@prisma/client';
+import { Media, MediaSource, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { MediaEntityType } from './media.service';
+
+export type MediaEntityType = 'battle' | 'war' | 'commander';
 
 @Injectable()
 export class MediaRepository {
@@ -11,15 +12,12 @@ export class MediaRepository {
     return this.prisma.media.create({ data });
   }
 
-  findAll(
-    where: Prisma.MediaWhereInput,
-    skip: number,
-    take: number,
-  ): Promise<[Media[], number]> {
+  findAll(source: MediaSource | undefined, skip: number, take: number): Promise<[Media[], number]> {
+    const where: Prisma.MediaWhereInput = source ? { source } : {};
     return this.prisma.$transaction([
       this.prisma.media.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
       this.prisma.media.count({ where }),
-    ]) as Promise<[Media[], number]>;
+    ]);
   }
 
   findById(id: string): Promise<Media | null> {
@@ -74,33 +72,28 @@ export class MediaRepository {
       }
       return 1;
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
-        return 0;
-      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') return 0;
       throw e;
     }
   }
 
-  findPrimaryRow(
-    type: MediaEntityType,
-    entityId: string,
-  ): Promise<{ media: Media } | null> {
+  findPrimaryRow(type: MediaEntityType, entityId: string): Promise<{ media: Media } | null> {
     if (type === 'battle') {
       return this.prisma.battleMedia.findFirst({
         where: { battleId: entityId, isPrimary: true },
         include: { media: true },
-      }) as Promise<{ media: Media } | null>;
+      });
     }
     if (type === 'war') {
       return this.prisma.warMedia.findFirst({
         where: { warId: entityId, isPrimary: true },
         include: { media: true },
-      }) as Promise<{ media: Media } | null>;
+      });
     }
     return this.prisma.commanderMedia.findFirst({
       where: { commanderId: entityId, isPrimary: true },
       include: { media: true },
-    }) as Promise<{ media: Media } | null>;
+    });
   }
 
   async findAllForEntity(type: MediaEntityType, entityId: string): Promise<Media[]> {
@@ -128,28 +121,17 @@ export class MediaRepository {
     return rows.map((r) => r.media);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async unsetPrimary(tx: any, type: MediaEntityType, entityId: string): Promise<void> {
     if (type === 'battle') {
-      await tx.battleMedia.updateMany({
-        where: { battleId: entityId, isPrimary: true },
-        data: { isPrimary: false },
-      });
+      await tx.battleMedia.updateMany({ where: { battleId: entityId, isPrimary: true }, data: { isPrimary: false } });
     } else if (type === 'war') {
-      await tx.warMedia.updateMany({
-        where: { warId: entityId, isPrimary: true },
-        data: { isPrimary: false },
-      });
+      await tx.warMedia.updateMany({ where: { warId: entityId, isPrimary: true }, data: { isPrimary: false } });
     } else {
-      await tx.commanderMedia.updateMany({
-        where: { commanderId: entityId, isPrimary: true },
-        data: { isPrimary: false },
-      });
+      await tx.commanderMedia.updateMany({ where: { commanderId: entityId, isPrimary: true }, data: { isPrimary: false } });
     }
   }
 
   private async createAttachment(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     client: any,
     type: MediaEntityType,
     mediaId: string,
@@ -158,17 +140,11 @@ export class MediaRepository {
     order: number,
   ): Promise<void> {
     if (type === 'battle') {
-      await client.battleMedia.create({
-        data: { mediaId, battleId: entityId, isPrimary, order },
-      });
+      await client.battleMedia.create({ data: { mediaId, battleId: entityId, isPrimary, order } });
     } else if (type === 'war') {
-      await client.warMedia.create({
-        data: { mediaId, warId: entityId, isPrimary, order },
-      });
+      await client.warMedia.create({ data: { mediaId, warId: entityId, isPrimary, order } });
     } else {
-      await client.commanderMedia.create({
-        data: { mediaId, commanderId: entityId, isPrimary, order },
-      });
+      await client.commanderMedia.create({ data: { mediaId, commanderId: entityId, isPrimary, order } });
     }
   }
 }

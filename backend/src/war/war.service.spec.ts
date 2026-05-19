@@ -3,6 +3,11 @@ import { NotFoundException } from '@nestjs/common';
 import { WarService } from './war.service';
 import { WarRepository } from './war.repository';
 
+jest.mock('@prisma/client', () => ({
+  PrismaClient: jest.fn(),
+  Prisma: {},
+}));
+
 // ─── Stubs ────────────────────────────────────────────────────────────────────
 
 const WAR_STUB = {

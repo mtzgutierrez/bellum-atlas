@@ -5,6 +5,8 @@ import { ScraperService } from './scraper.service';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { ScraperBattleDto } from './dto/scraper-battle.dto';
 
+jest.mock('@prisma/client', () => ({ PrismaClient: jest.fn(), Prisma: {}, BattleType: {} }));
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const BASE_DTO: ScraperBattleDto = {

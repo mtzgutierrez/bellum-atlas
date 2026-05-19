@@ -1,15 +1,11 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Media, MediaSource, Prisma } from '@prisma/client';
-import { MediaRepository } from './media.repository';
+import { MediaRepository, MediaEntityType } from './media.repository';
 import { CreateMediaDto } from './dto/create-media.dto';
 import { UpdateMediaDto } from './dto/update-media.dto';
 import { AttachMediaDto } from './dto/attach-media.dto';
 
-export type MediaEntityType = 'battle' | 'war' | 'commander';
+export type { MediaEntityType } from './media.repository';
 
 export interface FindAllParams {
   source?: MediaSource;
@@ -33,9 +29,7 @@ export class MediaService {
       return await this.mediaRepository.create(dto);
     } catch (e) {
       if (this.isUniqueViolation(e)) {
-        throw new ConflictException(
-          `Ya existe un recurso multimedia con la URL "${dto.url}"`,
-        );
+        throw new ConflictException(`Ya existe un recurso multimedia con la URL "${dto.url}"`);
       }
       throw e;
     }
@@ -43,10 +37,7 @@ export class MediaService {
 
   async findAll(params: FindAllParams = {}): Promise<FindAllResult> {
     const { source, skip = 0, take = 20 } = params;
-    const where: Prisma.MediaWhereInput = source ? { source } : {};
-
-    const [data, total] = await this.mediaRepository.findAll(where, skip, take);
-
+    const [data, total] = await this.mediaRepository.findAll(source, skip, take);
     return { data, total };
   }
 
@@ -64,9 +55,7 @@ export class MediaService {
       return await this.mediaRepository.update(id, dto);
     } catch (e) {
       if (this.isUniqueViolation(e)) {
-        throw new ConflictException(
-          `Ya existe un recurso multimedia con la URL "${dto.url}"`,
-        );
+        throw new ConflictException(`Ya existe un recurso multimedia con la URL "${dto.url}"`);
       }
       throw e;
     }
@@ -108,11 +97,7 @@ export class MediaService {
     }
   }
 
-  async detach(
-    mediaId: string,
-    entityType: MediaEntityType,
-    entityId: string,
-  ): Promise<void> {
+  async detach(mediaId: string, entityType: MediaEntityType, entityId: string): Promise<void> {
     const deleted = await this.mediaRepository.detach(entityType, mediaId, entityId);
     if (deleted === 0) {
       throw new NotFoundException(
@@ -123,26 +108,18 @@ export class MediaService {
 
   // ─── Query helpers ─────────────────────────────────────────────────────────
 
-  async getPrimary(
-    entityType: MediaEntityType,
-    entityId: string,
-  ): Promise<Media | null> {
+  async getPrimary(entityType: MediaEntityType, entityId: string): Promise<Media | null> {
     const row = await this.mediaRepository.findPrimaryRow(entityType, entityId);
     return row ? row.media : null;
   }
 
-  async listForEntity(
-    entityType: MediaEntityType,
-    entityId: string,
-  ): Promise<Media[]> {
+  async listForEntity(entityType: MediaEntityType, entityId: string): Promise<Media[]> {
     return this.mediaRepository.findAllForEntity(entityType, entityId);
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
 
   private isUniqueViolation(e: unknown): boolean {
-    return (
-      e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002'
-    );
+    return e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
   }
 }
