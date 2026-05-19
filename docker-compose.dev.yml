@@ -41,14 +41,6 @@ services:
       API_TARGET: "http://backend:3000"
     command: npm run dev -- --host
 
-  scraper:
-    profiles:
-      - manual
-    volumes:
-      - ./scraper:/app
-    working_dir: /app/ares
-    environment:
-      ENV: development
 
   # ─── Docs ────────────────────────────────────────────────
   docs:
