@@ -47,15 +47,32 @@ export class WikidataRepository {
         create: {
           warId: war.id,
           factionId,
+          side: f.side,
           strength: f.strength,
           deaths: f.deaths,
           injured: f.injured,
         },
         update: {
+          side: f.side,
           strength: f.strength,
           deaths: f.deaths,
           injured: f.injured,
         },
+      });
+    }
+
+    // Comandantes a nivel guerra (vienen del infobox de Wikipedia con side).
+    // Insertamos sólo si tenemos información del infobox; si no, dejamos que
+    // upsertCommander() siga rellenando CommanderWar sin side (P607).
+    for (const c of data.commanders) {
+      const commanderId = await this.upsertCommanderStub({
+        wikidataId: c.wikidataId,
+        name: c.name || c.wikidataId,
+      });
+      await this.prisma.commanderWar.upsert({
+        where: { commanderId_warId: { commanderId, warId: war.id } },
+        create: { commanderId, warId: war.id, side: c.side },
+        update: { side: c.side },
       });
     }
 

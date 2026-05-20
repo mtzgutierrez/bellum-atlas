@@ -143,6 +143,7 @@ export class WarController {
       c.id = cw.commander.id;
       c.name = cw.commander.name;
       c.slug = cw.commander.slug;
+      c.side = cw.side;
       return c;
     });
 

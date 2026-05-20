@@ -1,13 +1,13 @@
 import L from 'leaflet'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import SmartImage, { TYPE_LABEL } from '../components/SmartImage'
 import TypeIcon from '../components/TypeIcon'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useDebounce } from '../hooks/useDebounce'
 import { battleService } from '../services/battle.service'
-import type { BattleSummary } from '../services/battle.types'
+import type { BattleDetail, BattleSummary } from '../services/battle.types'
 import { formatYear } from '../utils/dates'
 
 const YEAR_MIN = -3000
@@ -20,6 +20,8 @@ interface Center {
 
 export default function MapExplorer() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const focusSlug = searchParams.get('focus')
   const [q, setQ] = useState('')
   const [yearMin, setYearMin] = useState(YEAR_MIN)
   const [yearMax, setYearMax] = useState(YEAR_MAX)
@@ -65,13 +67,25 @@ export default function MapExplorer() {
   const items = useMemo(() => data?.data ?? [], [data])
   const meta = data?.meta
 
+  // ── Foco desde URL (?focus=<slug>) ─────────────────────────────────────
+  // Permite que la página de detalle abra el mapa centrado en una batalla
+  // concreta (botón "Ver en el mapa"). Fetch del detalle para obtener las
+  // coordenadas, aunque la batalla no esté en la página actual de la lista.
+  const focusFetcher = useCallback(
+    () => (focusSlug ? battleService.detalle(focusSlug) : Promise.resolve(null)),
+    [focusSlug],
+  )
+  const { data: focusBattle } = useApiFetch(focusFetcher, [focusSlug])
+
   // ── Leaflet setup ──────────────────────────────────────────────────────
   const mapRef = useRef<L.Map | null>(null)
   const mapEl = useRef<HTMLDivElement | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
+  const focusLayerRef = useRef<L.LayerGroup | null>(null)
   const circleRef = useRef<L.Circle | null>(null)
   const centerMarkerRef = useRef<L.Marker | null>(null)
   const markersById = useRef<Map<string, L.Marker>>(new Map())
+  const [mapReady, setMapReady] = useState(false)
 
   useEffect(() => {
     if (mapRef.current || !mapEl.current) return
@@ -100,7 +114,9 @@ export default function MapExplorer() {
       .addTo(map)
 
     layerRef.current = L.layerGroup().addTo(map)
+    focusLayerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
+    setMapReady(true)
   }, [])
 
   // Click en mapa: si modo radio, fija el centro.
@@ -140,10 +156,11 @@ export default function MapExplorer() {
           minWidth: 200,
         })
         .on('click', () => setSelectedId(b.id))
+        .on('popupopen', (e) => bindPopupNavigation(e.popup, b.slug, navigate))
       marker.addTo(layer)
       markersById.current.set(b.id, marker)
     }
-  }, [items, selectedId])
+  }, [items, selectedId, navigate])
 
   // Círculo de radio + marker del centro.
   useEffect(() => {
@@ -187,6 +204,49 @@ export default function MapExplorer() {
     marker.openPopup()
   }, [selectedId])
 
+  // Marker de "foco" cuando llegamos con ?focus=<slug>. Vive en su propia
+  // capa para que las recargas de pines del listado no lo destruyan, y nos
+  // garantiza que la batalla pedida aparece aunque no esté en la página
+  // actual de resultados.
+  useEffect(() => {
+    const map = mapRef.current
+    const layer = focusLayerRef.current
+    if (!map || !layer) return
+    layer.clearLayers()
+    if (!focusBattle || focusBattle.latitude == null || focusBattle.longitude == null) {
+      return
+    }
+    const summary = battleDetailToSummary(focusBattle)
+    const marker = L.marker([focusBattle.latitude, focusBattle.longitude], {
+      icon: L.divIcon({
+        html: '<div class="battle-pin selected"></div>',
+        className: 'battle-pin-wrap',
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+      }),
+      zIndexOffset: 1000,
+    })
+      .bindPopup(buildPopup(summary), {
+        className: 'ares-popup',
+        maxWidth: 260,
+        minWidth: 200,
+      })
+      .on('popupopen', (e) => bindPopupNavigation(e.popup, summary.slug, navigate))
+      .addTo(layer)
+    setSelectedId(focusBattle.id)
+    map.flyTo([focusBattle.latitude, focusBattle.longitude], 6, { duration: 0.6 })
+    marker.openPopup()
+  }, [focusBattle, mapReady])
+
+  // Reset también quita el foco (la URL ya no apunta a una batalla concreta).
+  const clearFocus = () => {
+    if (focusSlug) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('focus')
+      setSearchParams(next, { replace: true })
+    }
+  }
+
   // Reset filtros: limpia query/años/radio/centro y vuelve a la primera página.
   const reset = () => {
     setQ('')
@@ -196,13 +256,15 @@ export default function MapExplorer() {
     setCenter(null)
     setRadiusKm(500)
     setPage(1)
+    clearFocus()
   }
 
   const hasFilters =
     q.length > 0 ||
     radiusOn ||
     yearMin !== YEAR_MIN ||
-    yearMax !== YEAR_MAX
+    yearMax !== YEAR_MAX ||
+    focusSlug != null
 
   return (
     <div className="map-page">
@@ -419,6 +481,24 @@ export default function MapExplorer() {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
+function battleDetailToSummary(b: BattleDetail): BattleSummary {
+  return {
+    id: b.id,
+    name: b.name,
+    slug: b.slug,
+    date: b.date,
+    dateStart: b.dateStart,
+    dateEnd: b.dateEnd,
+    locationName: b.locationName,
+    country: b.country,
+    latitude: b.latitude,
+    longitude: b.longitude,
+    type: b.type as BattleSummary['type'],
+    imageUrl: b.imageUrl,
+    wikipediaUrl: b.wikipediaUrl,
+  }
+}
+
 function buildPopup(b: BattleSummary): string {
   const escape = (s: string | null) =>
     (s ?? '').replace(/[&<>"']/g, (c) =>
@@ -427,6 +507,9 @@ function buildPopup(b: BattleSummary): string {
   const date = formatYear(b.date) ?? '—'
   const loc = b.locationName ? `${b.locationName}${b.country ? `, ${b.country}` : ''}` : '—'
   const type = b.type ? TYPE_LABEL[b.type] : '—'
+  // El href "real" sirve por accesibilidad (ctrl+click / abrir en nueva
+  // pestaña). El click normal se intercepta en `bindPopupNavigation` para
+  // navegar con React Router sin recarga.
   return `
     <div class="popup-content">
       <div class="name">${escape(b.name)}</div>
@@ -435,8 +518,29 @@ function buildPopup(b: BattleSummary): string {
         <div>${escape(loc)}</div>
         <div>${escape(type)}</div>
       </div>
-      <a class="open-link" href="#/battles/${escape(b.slug)}">Abrir ficha →</a>
+      <a class="open-link" data-battle-slug="${escape(b.slug)}" href="/battles/${escape(b.slug)}">Abrir ficha →</a>
     </div>`
+}
+
+// Enlaza el click del botón "Abrir ficha" del popup con el navigate de React
+// Router (BrowserRouter). Sin esto el href haría un page reload (o, peor, no
+// haría nada si el href fuese un hash bajo BrowserRouter).
+function bindPopupNavigation(
+  popup: L.Popup,
+  slug: string,
+  navigate: (path: string) => void,
+): void {
+  const el = popup.getElement()
+  if (!el) return
+  const link = el.querySelector<HTMLAnchorElement>('a.open-link')
+  if (!link) return
+  link.addEventListener('click', (e) => {
+    // Respetamos modificadores estándar (cmd/ctrl/middle-click → nueva pestaña).
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    if (e.button != null && e.button !== 0) return
+    e.preventDefault()
+    navigate(`/battles/${slug}`)
+  })
 }
 
 function formatYearLabel(y: number): string {

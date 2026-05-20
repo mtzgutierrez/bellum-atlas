@@ -35,11 +35,11 @@ export class BattleFactionDto {
   @ApiPropertyOptional({ nullable: true })
   outcome!: string | null;
   @ApiPropertyOptional({ nullable: true })
-  strength!: number | null;
+  strength!: string | null;
   @ApiPropertyOptional({ nullable: true })
-  deaths!: number | null;
+  deaths!: string | null;
   @ApiPropertyOptional({ nullable: true })
-  injured!: number | null;
+  injured!: string | null;
   @ApiProperty({ type: [BattleCommanderRefDto] })
   commanders!: BattleCommanderRefDto[];
 }

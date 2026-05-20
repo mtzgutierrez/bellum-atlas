@@ -21,6 +21,7 @@ export interface WarCommanderRef {
   id: string
   name: string
   slug: string
+  side: number | null
 }
 
 export interface WarFaction {
@@ -30,9 +31,9 @@ export interface WarFaction {
   flagUrl: string | null
   side: number | null
   outcome: string | null
-  strength: number | null
-  deaths: number | null
-  injured: number | null
+  strength: string | null
+  deaths: string | null
+  injured: string | null
 }
 
 export interface WarDetail {

@@ -25,6 +25,8 @@ export class WarCommanderRefDto {
   name!: string;
   @ApiProperty()
   slug!: string;
+  @ApiPropertyOptional({ nullable: true })
+  side!: number | null;
 }
 
 export class WarFactionDto {
@@ -41,11 +43,11 @@ export class WarFactionDto {
   @ApiPropertyOptional({ nullable: true })
   outcome!: string | null;
   @ApiPropertyOptional({ nullable: true })
-  strength!: number | null;
+  strength!: string | null;
   @ApiPropertyOptional({ nullable: true })
-  deaths!: number | null;
+  deaths!: string | null;
   @ApiPropertyOptional({ nullable: true })
-  injured!: number | null;
+  injured!: string | null;
 }
 
 // ─── Detalle completo ──────────────────────────────────────────────────────

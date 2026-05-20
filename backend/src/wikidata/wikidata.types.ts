@@ -13,9 +13,10 @@ export type WikidataFactionInBattle = {
   imageUrl: string | null;
   side: number | null;
   outcome: string | null;
-  strength: number | null;
-  deaths: number | null;
-  injured: number | null;
+  // Cifras textuales tal como aparecen en el infobox de Wikipedia.
+  strength: string | null;
+  deaths: string | null;
+  injured: string | null;
   commanders: WikidataRef[];
 };
 
@@ -47,9 +48,16 @@ export type WikidataFactionInWar = {
   wikidataId: string;
   name: string;
   flagUrl: string | null;
-  strength: number | null;
-  deaths: number | null;
-  injured: number | null;
+  side: number | null;
+  strength: string | null;
+  deaths: string | null;
+  injured: string | null;
+};
+
+export type WikidataCommanderInWar = {
+  wikidataId: string;
+  name: string;
+  side: number | null;
 };
 
 export type WikidataWar = {
@@ -65,6 +73,7 @@ export type WikidataWar = {
   wikipediaUrl: string | null;
   battles: WikidataRef[];
   factions: WikidataFactionInWar[];
+  commanders: WikidataCommanderInWar[];
 };
 
 export type WikidataCommanderRank = {

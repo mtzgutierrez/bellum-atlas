@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WikidataRepository } from './wikidata.repository';
+import { WikipediaService, type WikipediaInfobox } from './wikipedia.service';
 import type {
   WikidataBattle,
   WikidataBattleType,
@@ -24,7 +25,10 @@ type SparqlResponse = { results: { bindings: SparqlRow[] } };
 export class WikidataService {
   private readonly logger = new Logger(WikidataService.name);
 
-  constructor(private readonly repo: WikidataRepository) {}
+  constructor(
+    private readonly repo: WikidataRepository,
+    private readonly wikipedia: WikipediaService,
+  ) {}
 
   // ─── ORQUESTACIÓN (fetch + persist) ─────────────────────────────────────
 
@@ -44,13 +48,19 @@ export class WikidataService {
   }
 
   // Siembra una guerra completa: la propia guerra + cada una de sus batallas
-  // + cada comandante distinto que aparezca en ellas.
+  // + cada comandante distinto que aparezca en ellas o en el infobox de la
+  // guerra. Re-sembrar los comandantes los reescribe con sus datos completos
+  // (Wikidata + summary de Wikipedia), reemplazando los stubs con sólo título.
   async seedWarWithChildren(qid: string): Promise<void> {
-    await this.seedWar(qid);
+    const war = await this.fetchWar(qid);
+    await this.repo.upsertWar(war);
+
+    const commanderQids = new Set<string>();
+    for (const c of war.commanders) commanderQids.add(c.wikidataId);
+
     const battleRefs = await this.fetchBattlesOfWar(qid);
     this.logger.log(`War ${qid}: ${battleRefs.length} batallas`);
 
-    const commanderQids = new Set<string>();
     for (const ref of battleRefs) {
       const battle = await this.fetchBattle(ref.wikidataId);
       await this.repo.upsertBattle(battle);
@@ -101,6 +111,7 @@ export class WikidataService {
           await this.runSparql(this.bulkBattleWarsQuery(batch)),
           cache,
         );
+        await this.enrichBattlesWithWikipedia(cache, Math.min(delayMs, 200));
         for (const b of cache.values()) {
           try {
             await this.repo.upsertBattle(b);
@@ -152,6 +163,7 @@ export class WikidataService {
           await this.runSparql(this.bulkWarBattlesQuery(batch)),
           cache,
         );
+        await this.enrichWarsWithWikipedia(cache, Math.min(delayMs, 200));
         for (const w of cache.values()) {
           try {
             await this.repo.upsertWar(w);
@@ -207,6 +219,7 @@ export class WikidataService {
           await this.runSparql(this.bulkCommanderWarsQuery(batch)),
           cache,
         );
+        await this.enrichCommandersWithWikipedia(cache, Math.min(delayMs, 200));
         for (const c of cache.values()) {
           try {
             await this.repo.upsertCommander(c);
@@ -320,7 +333,6 @@ export class WikidataService {
     rows: SparqlRow[],
     cache: Map<string, WikidataBattle>,
   ) {
-    const sideCounters = new Map<string, number>();
     for (const r of rows) {
       const battleQid = qidFromUri(r.entity);
       const factionQid = qidFromUri(r.faction);
@@ -329,18 +341,18 @@ export class WikidataService {
 
       let faction = battle.factions.find((f) => f.wikidataId === factionQid);
       if (!faction) {
-        const next = (sideCounters.get(battleQid) ?? 0) + 1;
-        sideCounters.set(battleQid, next);
+        // `side` y cifras (strength/deaths/injured) se completan después con
+        // el infobox de Wikipedia, que es la fuente canónica del texto.
         faction = {
           wikidataId: factionQid,
           name: str(r.factionLabel) ?? '',
           flagUrl: str(r.factionFlag),
           imageUrl: null,
-          side: next,
+          side: null,
           outcome: null,
-          strength: int(r.strength),
-          deaths: int(r.factionDeaths),
-          injured: int(r.factionInjured),
+          strength: null,
+          deaths: null,
+          injured: null,
           commanders: [],
         };
         battle.factions.push(faction);
@@ -387,6 +399,7 @@ export class WikidataService {
           wikipediaUrl: str(r.article),
           battles: [],
           factions: [],
+          commanders: [],
         };
         cache.set(qid, war);
       }
@@ -406,9 +419,10 @@ export class WikidataService {
           wikidataId: factionQid,
           name: str(r.factionLabel) ?? '',
           flagUrl: str(r.factionFlag),
-          strength: int(r.strength),
-          deaths: int(r.factionDeaths),
-          injured: int(r.factionInjured),
+          side: null,
+          strength: null,
+          deaths: null,
+          injured: null,
         });
       }
     }
@@ -506,12 +520,16 @@ export class WikidataService {
     const locations = unique(
       rows.map((r) => str(r.locationLabel)).filter((v): v is string => !!v),
     );
+    const wikipediaUrl = str(head.wikipediaUrl);
 
-    const [battles, factions, summary] = await Promise.all([
+    const [battles, factions, summary, infobox] = await Promise.all([
       this.fetchBattlesOfWar(qid),
       this.fetchFactionsOfWar(qid),
-      this.fetchWikipediaSummary(str(head.wikipediaUrl)),
+      this.wikipedia.fetchSummary(wikipediaUrl),
+      this.wikipedia.fetchInfobox(wikipediaUrl),
     ]);
+
+    const commanders = applyWarInfobox(factions, infobox);
 
     return {
       wikidataId: qid,
@@ -523,9 +541,10 @@ export class WikidataService {
       locations,
       deaths: int(head.deaths),
       imageUrl: str(head.image),
-      wikipediaUrl: str(head.wikipediaUrl),
+      wikipediaUrl,
       battles,
       factions,
+      commanders,
     };
   }
 
@@ -542,11 +561,15 @@ export class WikidataService {
       if (t) { type = t; break; }
     }
 
-    const [factions, wars, summary] = await Promise.all([
+    const wikipediaUrl = str(head.wikipediaUrl);
+    const [factions, wars, summary, infobox] = await Promise.all([
       this.fetchFactionsOfBattle(qid),
       this.fetchWarsOfBattle(qid),
-      this.fetchWikipediaSummary(str(head.wikipediaUrl)),
+      this.wikipedia.fetchSummary(wikipediaUrl),
+      this.wikipedia.fetchInfobox(wikipediaUrl),
     ]);
+
+    applyBattleInfobox(factions, infobox);
 
     return {
       wikidataId: qid,
@@ -564,7 +587,7 @@ export class WikidataService {
       casualties: int(head.casualties),
       imageUrl: str(head.image),
       mapImageUrl: str(head.mapImage),
-      wikipediaUrl: str(head.wikipediaUrl),
+      wikipediaUrl,
       type,
       factions,
       wars,
@@ -583,7 +606,7 @@ export class WikidataService {
     const [ranks, wars, summary] = await Promise.all([
       this.fetchCommanderRanks(qid),
       this.fetchCommanderWars(qid),
-      this.fetchWikipediaSummary(str(head.wikipediaUrl)),
+      this.wikipedia.fetchSummary(str(head.wikipediaUrl)),
     ]);
 
     return {
@@ -637,23 +660,23 @@ export class WikidataService {
         wikidataId: qid,
         name: str(r.factionLabel) ?? '',
         flagUrl: str(r.factionFlag),
-        strength: int(r.strength),
-        deaths: int(r.factionDeaths),
-        injured: int(r.factionInjured),
+        side: null,
+        strength: null,
+        deaths: null,
+        injured: null,
       });
     }
     return Array.from(byFaction.values());
   }
 
   // Agrupa por facción para reunir los comandantes en una sola entrada.
-  // El `side` se asigna por orden de aparición (1, 2, 3...) ya que Wikidata
-  // no marca explícitamente bandos enfrentados.
+  // El `side` se deja sin asignar; lo resolverá el infobox de Wikipedia
+  // (ver applyBattleInfobox). Sin Wikipedia, queda en null.
   async fetchFactionsOfBattle(
     battleQid: string,
   ): Promise<WikidataFactionInBattle[]> {
     const rows = await this.runSparql(this.battleFactionsQuery(battleQid));
     const byFaction = new Map<string, WikidataFactionInBattle>();
-    let sideCounter = 0;
 
     for (const r of rows) {
       const factionQid = qidFromUri(r.faction);
@@ -661,17 +684,16 @@ export class WikidataService {
 
       let entry = byFaction.get(factionQid);
       if (!entry) {
-        sideCounter += 1;
         entry = {
           wikidataId: factionQid,
           name: str(r.factionLabel) ?? '',
           flagUrl: str(r.factionFlag),
           imageUrl: str(r.factionImage),
-          side: sideCounter,
+          side: null,
           outcome: null,
-          strength: int(r.strength),
-          deaths: int(r.factionDeaths),
-          injured: int(r.factionInjured),
+          strength: null,
+          deaths: null,
+          injured: null,
           commanders: [],
         };
         byFaction.set(factionQid, entry);
@@ -747,20 +769,69 @@ export class WikidataService {
     }
   }
 
-  private async fetchWikipediaSummary(
-    wikipediaUrl: string | null,
-  ): Promise<string | null> {
-    if (!wikipediaUrl?.startsWith(`${WIKIPEDIA_BASE}/wiki/`)) return null;
-    const title = wikipediaUrl.substring(`${WIKIPEDIA_BASE}/wiki/`.length);
-    const url = `${WIKIPEDIA_BASE}/api/rest_v1/page/summary/${title}`;
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-      if (!res.ok) return null;
-      const body = (await res.json()) as { extract?: string };
-      return body.extract ?? null;
-    } catch (err) {
-      this.logger.warn(`Wikipedia summary falló para ${title}: ${err}`);
-      return null;
+  // Para cada entidad ya mergeada en una batch SPARQL, llamamos a Wikipedia
+  // para enriquecerla con summary largo + bandos del infobox.
+  // Secuencial y con un pequeño delay para no martillear el endpoint.
+  private async enrichBattlesWithWikipedia(
+    cache: Map<string, WikidataBattle>,
+    delayMs: number,
+  ): Promise<void> {
+    for (const battle of cache.values()) {
+      if (!battle.wikipediaUrl) continue;
+      try {
+        const [summary, infobox] = await Promise.all([
+          this.wikipedia.fetchSummary(battle.wikipediaUrl),
+          this.wikipedia.fetchInfobox(battle.wikipediaUrl),
+        ]);
+        battle.summary = summary;
+        applyBattleInfobox(battle.factions, infobox);
+      } catch (err) {
+        this.logger.warn(
+          `enrich battle ${battle.wikidataId}: ${(err as Error).message}`,
+        );
+      }
+      if (delayMs > 0) await sleep(delayMs);
+    }
+  }
+
+  private async enrichWarsWithWikipedia(
+    cache: Map<string, WikidataWar>,
+    delayMs: number,
+  ): Promise<void> {
+    for (const war of cache.values()) {
+      if (!war.wikipediaUrl) continue;
+      try {
+        const [summary, infobox] = await Promise.all([
+          this.wikipedia.fetchSummary(war.wikipediaUrl),
+          this.wikipedia.fetchInfobox(war.wikipediaUrl),
+        ]);
+        war.summary = summary;
+        war.commanders = applyWarInfobox(war.factions, infobox);
+      } catch (err) {
+        this.logger.warn(
+          `enrich war ${war.wikidataId}: ${(err as Error).message}`,
+        );
+      }
+      if (delayMs > 0) await sleep(delayMs);
+    }
+  }
+
+  private async enrichCommandersWithWikipedia(
+    cache: Map<string, WikidataCommander>,
+    delayMs: number,
+  ): Promise<void> {
+    for (const commander of cache.values()) {
+      if (!commander.wikipediaUrl) continue;
+      try {
+        commander.summary = await this.wikipedia.fetchSummary(
+          commander.wikipediaUrl,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `enrich commander ${commander.wikidataId}: ${(err as Error).message}`,
+        );
+      }
+      if (delayMs > 0) await sleep(delayMs);
     }
   }
 
@@ -1248,3 +1319,173 @@ function classifyBattleType(instanceQid: string): WikidataBattleType | null {
   if (!instanceQid) return null;
   return BATTLE_TYPE_BY_QID[instanceQid] ?? null;
 }
+
+// ─── APLICACIÓN DEL INFOBOX DE WIKIPEDIA ──────────────────────────────────────
+// Wikidata no marca explícitamente los bandos enfrentados; el infobox sí
+// (combatientes1/2/3...). Usamos esa estructura para corregir el `side`
+// de cada facción y completar fuerzas/bajas si Wikidata no las traía.
+
+// Reconstruye la lista de facciones de la batalla a partir del infobox de
+// Wikipedia, que es la fuente canónica de bandos enfrentados. Las facciones
+// que Wikidata trajo y no aparecen en ningún lado del infobox se descartan
+// (no queremos una sección "otros participantes"). Las cifras se imprimen
+// tal cual aparecen en la wiki en la facción "líder" de cada bando.
+function applyBattleInfobox(
+  factions: WikidataFactionInBattle[],
+  infobox: WikipediaInfobox | null,
+): void {
+  if (!infobox) {
+    // Sin infobox no podemos clasificar; vaciamos para no pintar "otros".
+    factions.length = 0;
+    return;
+  }
+
+  const byQid = new Map(factions.map((f) => [f.wikidataId, f] as const));
+  const kept: WikidataFactionInBattle[] = [];
+
+  for (const side of infobox.sides) {
+    for (const ref of side.factions) {
+      let entry = byQid.get(ref.qid);
+      if (entry) {
+        entry.side = side.index;
+        // Preferimos el nombre del infobox: es el que ve el lector en la wiki.
+        if (ref.title) entry.name = ref.title;
+      } else {
+        entry = {
+          wikidataId: ref.qid,
+          name: ref.title,
+          flagUrl: null,
+          imageUrl: null,
+          side: side.index,
+          outcome: null,
+          strength: null,
+          deaths: null,
+          injured: null,
+          commanders: [],
+        };
+        byQid.set(ref.qid, entry);
+      }
+      if (!kept.includes(entry)) kept.push(entry);
+    }
+  }
+
+  // Atribuir totales del bando (soldados/bajas) a la facción "líder", la
+  // primera que aparece en el infobox de cada lado.
+  for (const side of infobox.sides) {
+    const sideFactions = kept.filter((f) => f.side === side.index);
+    if (sideFactions.length === 0) continue;
+    const leader = pickLeaderBattle(sideFactions, side);
+    leader.strength = side.strength;
+    leader.deaths = side.deaths;
+    leader.injured = side.injured;
+  }
+
+  // Comandantes del infobox sin enlazar todavía: los colgamos del líder de
+  // su lado para que aparezcan en la columna correcta.
+  const existingCommanders = new Set<string>();
+  for (const f of kept) {
+    for (const c of f.commanders) existingCommanders.add(c.wikidataId);
+  }
+  for (const side of infobox.sides) {
+    const sideFactions = kept.filter((f) => f.side === side.index);
+    if (sideFactions.length === 0) continue;
+    const target = pickLeaderBattle(sideFactions, side);
+    for (const cmd of side.commanders) {
+      if (existingCommanders.has(cmd.qid)) continue;
+      target.commanders.push({ wikidataId: cmd.qid, name: cmd.title });
+      existingCommanders.add(cmd.qid);
+    }
+  }
+
+  // Reemplaza in-place el array original (el caller conserva la referencia).
+  factions.length = 0;
+  factions.push(...kept);
+}
+
+// Igual que applyBattleInfobox pero para guerras: las facciones de la guerra
+// se toman exclusivamente del infobox; las que Wikidata aporta pero no
+// figuran en ningún lado se descartan para que todo lo visible esté en
+// bando 1 o bando 2 (sin sección "otros participantes").
+function applyWarInfobox(
+  factions: WikidataFactionInWar[],
+  infobox: WikipediaInfobox | null,
+): import('./wikidata.types').WikidataCommanderInWar[] {
+  if (!infobox) {
+    factions.length = 0;
+    return [];
+  }
+
+  const byQid = new Map(factions.map((f) => [f.wikidataId, f] as const));
+  const kept: WikidataFactionInWar[] = [];
+
+  for (const side of infobox.sides) {
+    for (const ref of side.factions) {
+      let entry = byQid.get(ref.qid);
+      if (entry) {
+        entry.side = side.index;
+        if (ref.title) entry.name = ref.title;
+      } else {
+        entry = {
+          wikidataId: ref.qid,
+          name: ref.title,
+          flagUrl: null,
+          side: side.index,
+          strength: null,
+          deaths: null,
+          injured: null,
+        };
+        byQid.set(ref.qid, entry);
+      }
+      if (!kept.includes(entry)) kept.push(entry);
+    }
+  }
+
+  // Totales por bando atribuidos al líder.
+  for (const side of infobox.sides) {
+    const sideFactions = kept.filter((f) => f.side === side.index);
+    if (sideFactions.length === 0) continue;
+    const leader = pickLeaderWar(sideFactions, side);
+    leader.strength = side.strength;
+    leader.deaths = side.deaths;
+    leader.injured = side.injured;
+  }
+
+  factions.length = 0;
+  factions.push(...kept);
+
+  // Comandantes con `side` para CommanderWar.
+  const out: import('./wikidata.types').WikidataCommanderInWar[] = [];
+  for (const side of infobox.sides) {
+    for (const cmd of side.commanders) {
+      if (out.some((c) => c.wikidataId === cmd.qid)) continue;
+      out.push({ wikidataId: cmd.qid, name: cmd.title, side: side.index });
+    }
+  }
+  return out;
+}
+
+// El "líder" de un bando es la primera facción que el infobox lista (combatientes1
+// suele empezar con la coalición o el imperio principal). Caemos a la primera
+// facción del lado si por lo que sea no encontramos coincidencia.
+function pickLeaderBattle(
+  sideFactions: WikidataFactionInBattle[],
+  side: import('./wikipedia.service').WikipediaSide,
+): WikidataFactionInBattle {
+  for (const ref of side.factions) {
+    const found = sideFactions.find((f) => f.wikidataId === ref.qid);
+    if (found) return found;
+  }
+  return sideFactions[0];
+}
+
+function pickLeaderWar(
+  sideFactions: WikidataFactionInWar[],
+  side: import('./wikipedia.service').WikipediaSide,
+): WikidataFactionInWar {
+  for (const ref of side.factions) {
+    const found = sideFactions.find((f) => f.wikidataId === ref.qid);
+    if (found) return found;
+  }
+  return sideFactions[0];
+}
+

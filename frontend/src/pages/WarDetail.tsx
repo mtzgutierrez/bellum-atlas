@@ -3,6 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { warService } from '../services/war.service'
+import type {
+  WarCommanderRef,
+  WarFaction,
+} from '../services/war.types'
 import { formatDateRange, formatYearRange } from '../utils/dates'
 
 export default function WarDetailPage() {
@@ -62,60 +66,20 @@ export default function WarDetailPage() {
         </section>
       )}
 
-      {war.factions.length > 0 && (
-        <section className="detail-section">
-          <h2 className="detail-section-title">Facciones</h2>
-          <div className="related-grid">
-            {war.factions.map((f) => (
-              <article
-                key={f.id}
-                style={{
-                  border: '1px solid var(--color-border)',
-                  background: 'var(--color-surface)',
-                  padding: 16,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {f.flagUrl && (
-                    <img
-                      src={f.flagUrl}
-                      alt=""
-                      style={{
-                        width: 28,
-                        height: 18,
-                        objectFit: 'cover',
-                        border: '1px solid var(--color-border)',
-                      }}
-                    />
-                  )}
-                  <div className="font-display" style={{ fontWeight: 600, fontSize: 15 }}>
-                    {f.name}
-                  </div>
-                </div>
-                {(f.strength != null || f.deaths != null || f.injured != null) && (
-                  <ul
-                    style={{
-                      listStyle: 'none',
-                      padding: 0,
-                      margin: '10px 0 0',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2,
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 12,
-                      color: 'var(--color-text-secondary)',
-                    }}
-                  >
-                    {f.strength != null && <li>Fuerzas: {f.strength.toLocaleString('es-ES')}</li>}
-                    {f.deaths != null && <li>Muertos: {f.deaths.toLocaleString('es-ES')}</li>}
-                    {f.injured != null && <li>Heridos: {f.injured.toLocaleString('es-ES')}</li>}
-                  </ul>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
+      {war.factions.length > 0 && (() => {
+        const { side1, side2 } = groupFactionsBySide(war.factions)
+        const c1 = war.commanders.filter((c) => c.side === 1)
+        const c2 = war.commanders.filter((c) => c.side === 2)
+        return (
+          <section className="detail-section">
+            <h2 className="detail-section-title">Bandos enfrentados</h2>
+            <div className="factions-grid">
+              <WarSideColumn side={1} factions={side1} commanders={c1} />
+              <WarSideColumn side={2} factions={side2} commanders={c2} />
+            </div>
+          </section>
+        )
+      })()}
 
       {war.battles.length > 0 && (
         <section className="detail-section">
@@ -138,24 +102,6 @@ export default function WarDetailPage() {
         </section>
       )}
 
-      {war.commanders.length > 0 && (
-        <section className="detail-section">
-          <h2 className="detail-section-title">Comandantes</h2>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {war.commanders.map((c) => (
-              <Link
-                key={c.id}
-                to={`/commanders/${c.slug}`}
-                className="btn btn-ghost"
-                style={{ padding: '8px 14px', fontSize: 12 }}
-              >
-                {c.name}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
       {war.wikipediaUrl && (
         <section className="detail-section">
           <a
@@ -172,3 +118,160 @@ export default function WarDetailPage() {
   )
 }
 
+function WarSideColumn({
+  side,
+  factions,
+  commanders,
+}: {
+  side: number
+  factions: WarFaction[]
+  commanders: WarCommanderRef[]
+}) {
+  if (factions.length === 0 && commanders.length === 0) {
+    return (
+      <div className="faction-col">
+        <div className="faction-side">Bando {side}</div>
+        <p
+          className="faction-belligerents"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          —
+        </p>
+      </div>
+    )
+  }
+  const totalStrength = firstNonNull(factions.map((f) => f.strength))
+  const totalDeaths = firstNonNull(factions.map((f) => f.deaths))
+  const totalInjured = firstNonNull(factions.map((f) => f.injured))
+  return (
+    <div className="faction-col">
+      <div className="faction-side">Bando {side}</div>
+      <ul
+        className="faction-belligerents"
+        style={{ listStyle: 'none', padding: 0, margin: 0 }}
+      >
+        {factions.map((f) => (
+          <li
+            key={f.id}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}
+          >
+            {f.flagUrl && (
+              <img
+                src={f.flagUrl}
+                alt=""
+                style={{
+                  width: 22,
+                  height: 14,
+                  objectFit: 'cover',
+                  border: '1px solid var(--color-border)',
+                }}
+              />
+            )}
+            <span>{f.name}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="faction-divider" />
+      <div className="faction-data">
+        <span className="label">Comandantes</span>
+      </div>
+      {commanders.length === 0 ? (
+        <p
+          style={{
+            color: 'var(--color-text-muted)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12,
+          }}
+        >
+          Sin nombres documentados.
+        </p>
+      ) : (
+        <ul className="faction-list">
+          {commanders.map((c) => (
+            <li key={c.id}>
+              <Link to={`/commanders/${c.slug}`} style={{ color: 'inherit' }}>
+                {c.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <SideTotals
+        strength={totalStrength}
+        deaths={totalDeaths}
+        injured={totalInjured}
+      />
+    </div>
+  )
+}
+
+// Bloque de cifras totales por bando. Los datos vienen del infobox de
+// Wikipedia como texto bruto ("Aprox. 300 000", varias líneas...) y los
+// pintamos con saltos de línea conservados, dejando claro que es el total
+// del bando, no de una facción individual.
+function SideTotals({
+  strength,
+  deaths,
+  injured,
+}: {
+  strength: string | null
+  deaths: string | null
+  injured: string | null
+}) {
+  if (strength == null && deaths == null && injured == null) return null
+  return (
+    <>
+      <div className="faction-divider" />
+      <div
+        className="font-mono"
+        style={{
+          fontSize: 10,
+          color: 'var(--color-text-muted)',
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          marginBottom: 6,
+        }}
+      >
+        Totales del bando
+      </div>
+      <SideTotalRow label="Fuerzas" value={strength} />
+      <SideTotalRow label="Muertos" value={deaths} />
+      <SideTotalRow label="Heridos" value={injured} />
+    </>
+  )
+}
+
+function SideTotalRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div
+      className="faction-data"
+      style={{ alignItems: 'flex-start', gap: 12 }}
+    >
+      <span className="label">{label}</span>
+      <span
+        className="value"
+        style={{ whiteSpace: 'pre-line', textAlign: 'right' }}
+      >
+        {value ?? 'Cifra no documentada'}
+      </span>
+    </div>
+  )
+}
+
+function groupFactionsBySide(factions: WarFaction[]): {
+  side1: WarFaction[]
+  side2: WarFaction[]
+} {
+  const side1: WarFaction[] = []
+  const side2: WarFaction[] = []
+  for (const f of factions) {
+    if (f.side === 1) side1.push(f)
+    else if (f.side === 2) side2.push(f)
+  }
+  return { side1, side2 }
+}
+
+function firstNonNull(values: (string | null)[]): string | null {
+  for (const v of values) if (v != null && v.length > 0) return v
+  return null
+}

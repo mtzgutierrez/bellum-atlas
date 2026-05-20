@@ -30,6 +30,7 @@ const WAR_DETAIL_INCLUDE = {
     },
   },
   commanders: {
+    orderBy: [{ side: 'asc' as const }],
     include: {
       commander: { select: { id: true, name: true, slug: true } },
     },

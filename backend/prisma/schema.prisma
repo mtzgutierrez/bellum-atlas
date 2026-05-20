@@ -192,9 +192,9 @@ model BattleFaction {
   factionId String
   side      Int?                                  // 1, 2... bandos enfrentados
   outcome   String?                               // "victoria", "derrota", "retirada"...
-  strength  Int?                                  // P1132 (qualifier): fuerzas en combate
-  deaths    Int?                                  // P1120 (qualifier): muertos del bando
-  injured   Int?                                  // P1339 (qualifier): heridos del bando
+  strength  String?                               // texto bruto del infobox de Wikipedia (P1132)
+  deaths    String?                               // texto bruto del infobox de Wikipedia (P1120)
+  injured   String?                               // texto bruto del infobox de Wikipedia (P1339)
 
   battle     Battle  @relation(fields: [battleId],  references: [id], onDelete: Cascade)
   faction    Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
@@ -230,9 +230,9 @@ model WarFaction {
   factionId String
   side      Int?
   outcome   String?
-  strength  Int?                                  // P1132 (qualifier)
-  deaths    Int?                                  // P1120 (qualifier)
-  injured   Int?                                  // P1339 (qualifier)
+  strength  String?                               // texto bruto del infobox de Wikipedia (P1132)
+  deaths    String?                               // texto bruto del infobox de Wikipedia (P1120)
+  injured   String?                               // texto bruto del infobox de Wikipedia (P1339)
 
   war     War     @relation(fields: [warId],     references: [id], onDelete: Cascade)
   faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
@@ -250,6 +250,7 @@ model WarFaction {
 model CommanderWar {
   commanderId String
   warId       String
+  side        Int?                              // bando del infobox de la guerra (comandante1/2…)
 
   commander Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
   war       War       @relation(fields: [warId],       references: [id], onDelete: Cascade)

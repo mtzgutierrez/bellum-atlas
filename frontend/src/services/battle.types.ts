@@ -35,9 +35,9 @@ export interface BattleFaction {
   flagUrl: string | null
   side: number | null
   outcome: string | null
-  strength: number | null
-  deaths: number | null
-  injured: number | null
+  strength: string | null
+  deaths: string | null
+  injured: string | null
   commanders: BattleCommanderRef[]
 }
 

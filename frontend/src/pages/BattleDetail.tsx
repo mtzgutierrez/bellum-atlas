@@ -54,8 +54,7 @@ function Detail({ battle }: { battle: BattleDetail }) {
   const type = battle.type as BattleType | null
   const typeLabel = type ? TYPE_LABEL[type] : '—'
   const war = battle.wars[0]
-  const sides = [...battle.factions].sort((a, b) => (a.side ?? 0) - (b.side ?? 0))
-  const [side1, side2] = [sides[0], sides[1]]
+  const { side1, side2 } = groupBySide(battle.factions)
 
   return (
     <main className="detail">
@@ -99,6 +98,12 @@ function Detail({ battle }: { battle: BattleDetail }) {
               )}
             </span>
           )}
+          {battle.latitude != null && battle.longitude != null && (
+            <Link to={`/map?focus=${battle.slug}`} className="item btn-link">
+              <Icon name="map" size={14} />
+              <span>Ver en el mapa</span>
+            </Link>
+          )}
           {war && (
             <span className="item">
               <Icon name="flag" />
@@ -138,23 +143,13 @@ function Detail({ battle }: { battle: BattleDetail }) {
 
       <StatsRow battle={battle} />
 
-      {(side1 || side2) && (
+      {(side1.length > 0 || side2.length > 0) && (
         <section className="detail-section">
           <h2 className="detail-section-title">Bandos enfrentados</h2>
           <div className="factions-grid">
-            <FactionColumn side={1} faction={side1} />
-            <FactionColumn side={2} faction={side2} />
+            <SideColumn side={1} factions={side1} />
+            <SideColumn side={2} factions={side2} />
           </div>
-          {sides.length > 2 && (
-            <div className="detail-section" style={{ marginTop: 32 }}>
-              <h2 className="detail-section-title">Otros participantes</h2>
-              <div className="related-grid">
-                {sides.slice(2).map((f) => (
-                  <FactionMiniCard key={f.id} faction={f} />
-                ))}
-              </div>
-            </div>
-          )}
         </section>
       )}
 
@@ -232,14 +227,17 @@ function StatsRow({ battle }: { battle: BattleDetail }) {
   )
 }
 
-function FactionColumn({
+// Agrupa todas las facciones del mismo bando en una columna estilo Wikipedia:
+// los nombres se listan en bloque, y debajo se suman los comandantes y las
+// fuerzas/bajas por facción.
+function SideColumn({
   side,
-  faction,
+  factions,
 }: {
   side: number
-  faction: BattleFaction | undefined
+  factions: BattleFaction[]
 }) {
-  if (!faction) {
+  if (factions.length === 0) {
     return (
       <div className="faction-col">
         <div className="faction-side">Bando {side}</div>
@@ -249,16 +247,43 @@ function FactionColumn({
       </div>
     )
   }
-  const commanders = faction.commanders
+  const allCommanders = factions.flatMap((f) => f.commanders)
+  const totalStrength = firstNonNull(factions.map((f) => f.strength))
+  const totalDeaths = firstNonNull(factions.map((f) => f.deaths))
+  const totalInjured = firstNonNull(factions.map((f) => f.injured))
   return (
     <div className="faction-col">
-      <div className="faction-side">Bando {faction.side ?? side}</div>
-      <h3 className="faction-belligerents">{faction.name}</h3>
+      <div className="faction-side">Bando {side}</div>
+      <ul
+        className="faction-belligerents"
+        style={{ listStyle: 'none', padding: 0, margin: 0 }}
+      >
+        {factions.map((f) => (
+          <li
+            key={f.id}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}
+          >
+            {f.flagUrl && (
+              <img
+                src={f.flagUrl}
+                alt=""
+                style={{
+                  width: 22,
+                  height: 14,
+                  objectFit: 'cover',
+                  border: '1px solid var(--color-border)',
+                }}
+              />
+            )}
+            <span>{f.name}</span>
+          </li>
+        ))}
+      </ul>
       <div className="faction-divider" />
       <div className="faction-data">
         <span className="label">Comandantes</span>
       </div>
-      {commanders.length === 0 ? (
+      {allCommanders.length === 0 ? (
         <p
           style={{
             color: 'var(--color-text-muted)',
@@ -270,8 +295,8 @@ function FactionColumn({
         </p>
       ) : (
         <ul className="faction-list">
-          {commanders.map((c) => (
-            <li key={c.id}>
+          {allCommanders.map((c) => (
+            <li key={`${c.id}`}>
               <Link
                 to={`/commanders/${c.slug}`}
                 style={{
@@ -290,62 +315,80 @@ function FactionColumn({
           ))}
         </ul>
       )}
-      <div className="faction-divider" />
-      <div className="faction-data">
-        <span className="label">Fuerzas</span>
-        <span className="value">
-          {faction.strength != null
-            ? faction.strength.toLocaleString('es-ES')
-            : 'Cifra no documentada'}
-        </span>
-      </div>
-      <div className="faction-data">
-        <span className="label">Muertos</span>
-        <span className="value">
-          {faction.deaths != null
-            ? faction.deaths.toLocaleString('es-ES')
-            : 'Cifra no documentada'}
-        </span>
-      </div>
-      <div className="faction-data">
-        <span className="label">Heridos</span>
-        <span className="value">
-          {faction.injured != null
-            ? faction.injured.toLocaleString('es-ES')
-            : 'Cifra no documentada'}
-        </span>
-      </div>
+      <SideTotals
+        strength={totalStrength}
+        deaths={totalDeaths}
+        injured={totalInjured}
+      />
     </div>
   )
 }
 
-function FactionMiniCard({ faction }: { faction: BattleFaction }) {
+// Cifras totales del bando, en texto bruto del infobox de Wikipedia.
+// El encabezado deja claro que es el agregado del bando.
+function SideTotals({
+  strength,
+  deaths,
+  injured,
+}: {
+  strength: string | null
+  deaths: string | null
+  injured: string | null
+}) {
+  if (strength == null && deaths == null && injured == null) return null
   return (
-    <article
-      style={{
-        border: '1px solid var(--color-border)',
-        background: 'var(--color-surface)',
-        padding: 16,
-      }}
-    >
-      <div className="faction-side">Bando {faction.side ?? '—'}</div>
+    <>
+      <div className="faction-divider" />
       <div
-        className="font-display"
-        style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}
+        className="font-mono"
+        style={{
+          fontSize: 10,
+          color: 'var(--color-text-muted)',
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          marginBottom: 6,
+        }}
       >
-        {faction.name}
+        Totales del bando
       </div>
-      {faction.commanders.length > 0 && (
-        <ul className="faction-list" style={{ marginTop: 12 }}>
-          {faction.commanders.map((c) => (
-            <li key={c.id}>
-              <Link to={`/commanders/${c.slug}`} style={{ color: 'inherit' }}>
-                {c.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </article>
+      <SideTotalRow label="Fuerzas" value={strength} />
+      <SideTotalRow label="Muertos" value={deaths} />
+      <SideTotalRow label="Heridos" value={injured} />
+    </>
   )
+}
+
+function SideTotalRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div
+      className="faction-data"
+      style={{ alignItems: 'flex-start', gap: 12 }}
+    >
+      <span className="label">{label}</span>
+      <span
+        className="value"
+        style={{ whiteSpace: 'pre-line', textAlign: 'right' }}
+      >
+        {value ?? 'Cifra no documentada'}
+      </span>
+    </div>
+  )
+}
+
+function groupBySide(factions: BattleFaction[]): {
+  side1: BattleFaction[]
+  side2: BattleFaction[]
+} {
+  const side1: BattleFaction[] = []
+  const side2: BattleFaction[] = []
+  for (const f of factions) {
+    if (f.side === 1) side1.push(f)
+    else if (f.side === 2) side2.push(f)
+  }
+  return { side1, side2 }
+}
+
+function firstNonNull(values: (string | null)[]): string | null {
+  for (const v of values) if (v != null && v.length > 0) return v
+  return null
 }

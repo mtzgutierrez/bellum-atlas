@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WikidataRepository } from './wikidata.repository';
 import { WikidataService } from './wikidata.service';
+import { WikipediaService } from './wikipedia.service';
 
 describe('WikidataService', () => {
   let service: WikidataService;
@@ -10,6 +11,7 @@ describe('WikidataService', () => {
       providers: [
         WikidataService,
         { provide: WikidataRepository, useValue: {} },
+        { provide: WikipediaService, useValue: {} },
       ],
     }).compile();
 
