@@ -7,285 +7,142 @@ datasource db {
 }
 
 // =============================================================================
-// MODELO DE DATOS – ARES CODEX
+// MODELO DE DATOS – HISTORICAL ATLAS
 // =============================================================================
-// Nutrido desde Wikidata (entidades principales) + Wikipedia REST (resúmenes).
-// Las propiedades Pxxx en los comentarios indican el origen en Wikidata.
-//
-// Núcleo:
-//   War   ──< BattleWar >── Battle ──< BattleFaction >── Faction
-//                                          │
-//                                          └─< BattleFactionCommander >── Commander
-//
-// Extensiones:
-//   War  ──< WarFaction >── Faction           (participantes a nivel guerra)
-//   War  ──< CommanderWar >── Commander       (P607: participated in conflict)
-//   Commander ──< CommanderRank >             (P410 con qualifiers temporales)
-//   Battle ──< BattleMedia >                  (imágenes/mapas adicionales)
+// Diseño intencionadamente simple. Sólo Battle / War / Commander y relaciones
+// directas. Las fechas son años (Int) para alimentar el timeline. La IA queda
+// pre-computada en BattleAISummary; nunca se invoca síncronamente en una
+// request del usuario.
 // =============================================================================
 
-
-// ─── GUERRA ──────────────────────────────────────────────────────────────────
-model War {
-  id           String    @id @default(cuid())
-  wikidataId   String?   @unique               // Q362, Q8740...
-  name         String                          // rdfs:label
-  slug         String    @unique
-  description  String?                         // schema:description (corto)
-  summary      String?                         // extract de Wikipedia REST (largo)
-  dateStart    DateTime?                       // P580
-  dateEnd      DateTime?                       // P582
-  locations    String[]  @default([])          // P276 (puede tener varias)
-  deaths       Int?                            // P1120
-  imageUrl     String?                         // P18
-  wikipediaUrl String?   @unique
-
-  battles      BattleWar[]
-  factions     WarFaction[]
-  commanders   CommanderWar[]
-
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  @@index([dateStart])
-  @@map("wars")
-}
-
-
-// ─── BATALLA ─────────────────────────────────────────────────────────────────
 model Battle {
-  id           String      @id @default(cuid())
-  wikidataId   String?     @unique             // Q165425, Q154950...
-  name         String                          // rdfs:label
-  slug         String      @unique
-  description  String?                         // schema:description
-  summary      String?                         // extract de Wikipedia REST
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  wikidataId      String?    @unique
+  name            String
+  slug            String     @unique
 
-  // Fechas: P585 si fue un solo día, P580/P582 si tuvo duración
-  date         DateTime?                       // P585
-  dateStart    DateTime?                       // P580
-  dateEnd      DateTime?                       // P582
+  // Años (suficiente para timeline; fechas exactas eran ruido).
+  year            Int?
+  startYear       Int?
+  endYear         Int?
 
-  // Ubicación
-  locationName String?                         // label de P276
-  country      String?                         // label de P17
-  lat          Float?                          // P625 (WGS84)
-  lng          Float?                          // P625 (WGS84)
+  // Geo. Sin PostGIS: bbox queries con índice compuesto (lat, lng).
+  latitude        Float?
+  longitude       Float?
 
-  // Bajas
-  deaths       Int?                            // P1120
-  casualties   Int?                            // P1590 (cuando no hay deaths precisos)
+  // Catalogación ligera.
+  imageUrl        String?
+  wikipediaUrl    String?
+  summary         String?    // extract de Wikipedia, opcional, sirve de seed
+                             // para el prompt de IA. No es contenido AI.
+  type            BattleType @default(BATTLE)
 
-  // Visuales
-  imageUrl     String?                         // P18
-  mapImageUrl  String?                         // P242 (locator map)
-  wikipediaUrl String?     @unique
+  // 0-100. Proxy: nº de sitelinks de Wikidata normalizado. Battles con score
+  // alto se pre-generan en IA.
+  importanceScore Int        @default(0)
 
-  // Clasificación opcional (derivable de P31)
-  type         BattleType?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  wars         BattleWar[]
-  factions     BattleFaction[]
-  media        BattleMedia[]
+  wars            BattleWar[]
+  commanders      BattleCommander[]
+  aiSummary       BattleAISummary?
 
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  @@index([date])
-  @@index([country])
+  @@index([year])
+  @@index([latitude, longitude])
+  @@index([importanceScore])
   @@map("battles")
 }
 
-
-// ─── FACCIÓN (bando: Imperio Otomano, Monarquía Hispánica...) ────────────────
-model Faction {
-  id           String          @id @default(cuid())
-  wikidataId   String?         @unique
-  name         String                              // rdfs:label
-  slug         String          @unique
-  description  String?                             // schema:description
-  flagUrl      String?                             // P41 (bandera)
-  imageUrl     String?                             // P18
-  wikipediaUrl String?         @unique
-
-  battles      BattleFaction[]
-  wars         WarFaction[]
-
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-
-  @@map("factions")
-}
-
-
-// ─── COMANDANTE ──────────────────────────────────────────────────────────────
-model Commander {
-  id           String   @id @default(cuid())
+model War {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   wikidataId   String?  @unique
-  name         String                            // rdfs:label
+  name         String
   slug         String   @unique
-  description  String?                           // schema:description
-  summary      String?                           // extract de Wikipedia REST
-  aliases      String[] @default([])             // skos:altLabel
-
-  // Biografía
-  birthDate    DateTime?                         // P569
-  birthPlace   String?                           // label de P19
-  deathDate    DateTime?                         // P570
-  deathPlace   String?                           // label de P20
-  causeOfDeath String?                           // label de P509
-  nationality  String?                           // label de P27
-
-  imageUrl     String?                           // P18
-  wikipediaUrl String?  @unique
-
-  ranks          CommanderRank[]                 // P410 con qualifiers
-  battleFactions BattleFactionCommander[]        // batallas concretas
-  wars           CommanderWar[]                  // P607 a nivel guerra
+  startYear    Int?
+  endYear      Int?
+  imageUrl     String?
+  wikipediaUrl String?
+  summary      String?
+  region       String?
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  battles      BattleWar[]
+
+  @@index([startYear])
+  @@map("wars")
+}
+
+model Commander {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  wikidataId   String?  @unique
+  name         String
+  slug         String   @unique
+  birthYear    Int?
+  deathYear    Int?
+  imageUrl     String?
+  wikipediaUrl String?
+  summary      String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  battles      BattleCommander[]
+
   @@map("commanders")
 }
 
-
-// ─── RANGOS MILITARES DE UN COMANDANTE ───────────────────────────────────────
-// P410 puede aparecer varias veces con qualifiers P580/P582 (vigencia del rango)
-model CommanderRank {
-  id          String    @id @default(cuid())
-  commanderId String
-  name        String                              // label de P410
-  wikidataId  String?                             // QID del rango
-  dateStart   DateTime?                           // P580 (qualifier)
-  dateEnd     DateTime?                           // P582 (qualifier)
-
-  commander   Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
-
-  @@index([commanderId])
-  @@map("commander_ranks")
-}
-
-
-// ─── RELACIÓN BATALLA ↔ GUERRA ───────────────────────────────────────────────
-// P361 desde la batalla o P527 desde la guerra. Una batalla puede pertenecer
-// a más de una guerra/campaña.
 model BattleWar {
-  battleId String
-  warId    String
+  battleId String @db.Uuid
+  warId    String @db.Uuid
 
   battle   Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
-  war      War    @relation(fields: [warId],    references: [id], onDelete: Cascade)
+  war      War    @relation(fields: [warId], references: [id], onDelete: Cascade)
 
   @@id([battleId, warId])
   @@index([warId])
   @@map("battle_wars")
 }
 
+model BattleCommander {
+  battleId    String  @db.Uuid
+  commanderId String  @db.Uuid
+  side        String?       // "Aliados"/"Eje"/"1"/"2"... libre
 
-// ─── RELACIÓN BATALLA ↔ FACCIÓN ──────────────────────────────────────────────
-// P710 de la batalla con qualifiers para fuerzas y bajas por bando.
-// `side` agrupa visualmente bandos enfrentados (1, 2...).
-model BattleFaction {
-  id        String  @id @default(cuid())
-  battleId  String
-  factionId String
-  side      Int?                                  // 1, 2... bandos enfrentados
-  outcome   String?                               // "victoria", "derrota", "retirada"...
-  strength  String?                               // texto bruto del infobox de Wikipedia (P1132)
-  deaths    String?                               // texto bruto del infobox de Wikipedia (P1120)
-  injured   String?                               // texto bruto del infobox de Wikipedia (P1339)
+  battle      Battle    @relation(fields: [battleId],    references: [id], onDelete: Cascade)
+  commander   Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
 
-  battle     Battle  @relation(fields: [battleId],  references: [id], onDelete: Cascade)
-  faction    Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
-  commanders BattleFactionCommander[]
-
-  @@unique([battleId, factionId])
-  @@index([battleId])
-  @@index([factionId])
-  @@map("battle_factions")
+  @@id([battleId, commanderId])
+  @@index([commanderId])
+  @@map("battle_commanders")
 }
 
+// ─── CACHÉ PERMANENTE DE IA ────────────────────────────────────────────────
+// Una row por batalla. Si no existe, el endpoint devuelve 202 y encola.
+// Nunca se invalida automáticamente.
+model BattleAISummary {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  battleId    String   @unique @db.Uuid
 
-// ─── COMANDANTES DE UNA FACCIÓN EN UNA BATALLA (M:N) ─────────────────────────
-// Viene del qualifier P4791 (commanded by) sobre el statement P710 de la batalla.
-model BattleFactionCommander {
-  commanderId     String
-  battleFactionId String
+  summary     String   @db.Text     // narrativa principal (Story Mode)
+  context     String   @db.Text     // contexto estratégico
+  outcome     String   @db.Text     // resultado y consecuencias
+  curiosities String   @db.Text     // anécdotas y datos curiosos
 
-  commander     Commander     @relation(fields: [commanderId],     references: [id], onDelete: Cascade)
-  battleFaction BattleFaction @relation(fields: [battleFactionId], references: [id], onDelete: Cascade)
+  modelUsed   String                // p.ej. "claude-sonnet-4-6" o "mock"
+  promptHash  String                // hash del prompt usado, para auditar
 
-  @@id([commanderId, battleFactionId])
-  @@index([battleFactionId])
-  @@map("battle_faction_commanders")
+  createdAt   DateTime @default(now())
+
+  battle      Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
+
+  @@map("battle_ai_summaries")
 }
 
-
-// ─── RELACIÓN GUERRA ↔ FACCIÓN ───────────────────────────────────────────────
-// P710 desde la guerra. Útil cuando interesa el panorama global aunque no
-// haya batallas concretas registradas para ese bando.
-model WarFaction {
-  warId     String
-  factionId String
-  side      Int?
-  outcome   String?
-  strength  String?                               // texto bruto del infobox de Wikipedia (P1132)
-  deaths    String?                               // texto bruto del infobox de Wikipedia (P1120)
-  injured   String?                               // texto bruto del infobox de Wikipedia (P1339)
-
-  war     War     @relation(fields: [warId],     references: [id], onDelete: Cascade)
-  faction Faction @relation(fields: [factionId], references: [id], onDelete: Cascade)
-
-  @@id([warId, factionId])
-  @@index([factionId])
-  @@map("war_factions")
-}
-
-
-// ─── RELACIÓN COMANDANTE ↔ GUERRA ────────────────────────────────────────────
-// P607 "participated in conflict" del comandante apuntando a una guerra
-// (cuando no existe una batalla concreta o se quiere recoger participación
-// a nivel campaña).
-model CommanderWar {
-  commanderId String
-  warId       String
-  side        Int?                              // bando del infobox de la guerra (comandante1/2…)
-
-  commander Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
-  war       War       @relation(fields: [warId],       references: [id], onDelete: Cascade)
-
-  @@id([commanderId, warId])
-  @@index([warId])
-  @@map("commander_wars")
-}
-
-
-// ─── MEDIA ADICIONAL DE UNA BATALLA ──────────────────────────────────────────
-model BattleMedia {
-  id       String    @id @default(cuid())
-  battleId String
-  url      String
-  type     MediaType
-  caption  String?
-
-  battle   Battle    @relation(fields: [battleId], references: [id], onDelete: Cascade)
-
-  @@index([battleId])
-  @@map("battle_media")
-}
-
-
-// ─── ENUMS ───────────────────────────────────────────────────────────────────
 enum BattleType {
-  LAND
-  NAVAL
-  AIR
+  BATTLE
   SIEGE
-  MIXED
-}
-
-enum MediaType {
-  IMAGE
-  MAP
+  CAMPAIGN
 }

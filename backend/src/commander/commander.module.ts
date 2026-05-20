@@ -6,8 +6,8 @@ import { CommanderService } from './commander.service';
 
 @Module({
   imports: [PrismaModule],
-  providers: [CommanderService, CommanderRepository],
   controllers: [CommanderController],
-  exports: [CommanderService],
+  providers: [CommanderService, CommanderRepository],
+  exports: [CommanderService, CommanderRepository],
 })
 export class CommanderModule {}

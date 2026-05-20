@@ -6,8 +6,8 @@ import { BattleService } from './battle.service';
 
 @Module({
   imports: [PrismaModule],
-  providers: [BattleService, BattleRepository],
   controllers: [BattleController],
-  exports: [BattleService],
+  providers: [BattleService, BattleRepository],
+  exports: [BattleService, BattleRepository],
 })
 export class BattleModule {}

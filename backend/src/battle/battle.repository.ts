@@ -2,218 +2,152 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-const BATTLE_DETAIL_INCLUDE = {
+// Lo mínimo necesario para pintar un marker en Leaflet. Sin imágenes ni
+// summaries: queremos respuestas de pocos KB aunque haya miles de puntos.
+const POINT_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  year: true,
+  latitude: true,
+  longitude: true,
+  type: true,
+  importanceScore: true,
+} satisfies Prisma.BattleSelect;
+
+export type BattlePoint = Prisma.BattleGetPayload<{ select: typeof POINT_SELECT }>;
+
+const SUMMARY_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  year: true,
+  startYear: true,
+  endYear: true,
+  latitude: true,
+  longitude: true,
+  imageUrl: true,
+  type: true,
+  importanceScore: true,
+} satisfies Prisma.BattleSelect;
+
+export type BattleSummary = Prisma.BattleGetPayload<{ select: typeof SUMMARY_SELECT }>;
+
+const DETAIL_INCLUDE = {
   wars: {
     include: {
       war: { select: { id: true, name: true, slug: true } },
     },
   },
-  factions: {
-    orderBy: { side: 'asc' as const },
+  commanders: {
     include: {
-      faction: {
-        select: { id: true, name: true, slug: true, flagUrl: true },
-      },
-      commanders: {
-        include: {
-          commander: { select: { id: true, name: true, slug: true } },
-        },
-      },
+      commander: { select: { id: true, name: true, slug: true } },
     },
   },
-  media: true,
+  aiSummary: { select: { id: true } },
 } satisfies Prisma.BattleInclude;
 
 export type BattleWithRelations = Prisma.BattleGetPayload<{
-  include: typeof BATTLE_DETAIL_INCLUDE;
+  include: typeof DETAIL_INCLUDE;
 }>;
 
-const SIMPLIFIED_SELECT = {
-  id: true,
-  name: true,
-  slug: true,
-  date: true,
-  dateStart: true,
-  dateEnd: true,
-  locationName: true,
-  country: true,
-  lat: true,
-  lng: true,
-  type: true,
-  imageUrl: true,
-  wikipediaUrl: true,
-} satisfies Prisma.BattleSelect;
-
-export type BattleSimplified = Prisma.BattleGetPayload<{
-  select: typeof SIMPLIFIED_SELECT;
-}>;
-
-type Page = { skip: number; take: number };
+export type BattleFilters = {
+  yearMin?: number;
+  yearMax?: number;
+  bbox?: { north: number; south: number; east: number; west: number };
+  search?: string;
+  minImportance?: number;
+};
 
 @Injectable()
 export class BattleRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  contar(where: Prisma.BattleWhereInput = {}): Promise<number> {
-    return this.prisma.battle.count({ where });
-  }
-
-  listar(page: Page): Promise<BattleSimplified[]> {
+  // ─── Endpoint /battles/points: todos los markers del mapa ──────────────
+  // El cliente luego clusteriza con leaflet.markercluster. Cap a 10k para
+  // protegernos de payloads gigantes; el frontend pagina por importancia.
+  findPoints(filters: BattleFilters, limit = 10000): Promise<BattlePoint[]> {
     return this.prisma.battle.findMany({
-      select: SIMPLIFIED_SELECT,
-      orderBy: [{ date: 'asc' }, { dateStart: 'asc' }],
-      ...page,
+      where: this.buildWhere(filters, { requireCoords: true }),
+      select: POINT_SELECT,
+      orderBy: { importanceScore: 'desc' },
+      take: limit,
     });
   }
 
-  buscarPorNombre(nombre: string, page: Page): Promise<BattleSimplified[]> {
+  // ─── Endpoint /battles: paginado para sidebar ──────────────────────────
+  findPaginated(
+    filters: BattleFilters,
+    skip: number,
+    take: number,
+  ): Promise<BattleSummary[]> {
     return this.prisma.battle.findMany({
-      where: this.whereNombre(nombre),
-      select: SIMPLIFIED_SELECT,
-      orderBy: { name: 'asc' },
-      ...page,
+      where: this.buildWhere(filters),
+      select: SUMMARY_SELECT,
+      orderBy: [{ importanceScore: 'desc' }, { year: 'asc' }],
+      skip,
+      take,
     });
   }
 
-  contarPorNombre(nombre: string): Promise<number> {
-    return this.prisma.battle.count({ where: this.whereNombre(nombre) });
+  count(filters: BattleFilters): Promise<number> {
+    return this.prisma.battle.count({ where: this.buildWhere(filters) });
   }
 
-  // Bounding box aproximada: 1° lat ≈ 111 km; 1° lng ≈ 111·cos(lat) km.
-  buscarPorCoordenadas(
-    lat: number,
-    lng: number,
-    radiusKm: number,
-    page: Page,
-  ): Promise<BattleSimplified[]> {
-    return this.prisma.battle.findMany({
-      where: this.whereCoordenadas(lat, lng, radiusKm),
-      select: SIMPLIFIED_SELECT,
-      orderBy: { date: 'asc' },
-      ...page,
-    });
-  }
-
-  contarPorCoordenadas(lat: number, lng: number, radiusKm: number): Promise<number> {
-    return this.prisma.battle.count({
-      where: this.whereCoordenadas(lat, lng, radiusKm),
-    });
-  }
-
-  buscarPorPeriodo(
-    startDate: Date,
-    endDate: Date,
-    page: Page,
-  ): Promise<BattleSimplified[]> {
-    return this.prisma.battle.findMany({
-      where: this.wherePeriodo(startDate, endDate),
-      select: SIMPLIFIED_SELECT,
-      orderBy: [{ date: 'asc' }, { dateStart: 'asc' }],
-      ...page,
-    });
-  }
-
-  contarPorPeriodo(startDate: Date, endDate: Date): Promise<number> {
-    return this.prisma.battle.count({ where: this.wherePeriodo(startDate, endDate) });
-  }
-
-  buscarPorGuerra(warId: string, page: Page): Promise<BattleSimplified[]> {
-    return this.prisma.battle.findMany({
-      where: { wars: { some: { warId } } },
-      select: SIMPLIFIED_SELECT,
-      orderBy: [{ date: 'asc' }, { dateStart: 'asc' }],
-      ...page,
-    });
-  }
-
-  contarPorGuerra(warId: string): Promise<number> {
-    return this.prisma.battle.count({ where: { wars: { some: { warId } } } });
-  }
-
-  buscarPorComandante(commanderId: string, page: Page): Promise<BattleSimplified[]> {
-    return this.prisma.battle.findMany({
-      where: this.whereComandante(commanderId),
-      select: SIMPLIFIED_SELECT,
-      orderBy: [{ date: 'asc' }, { dateStart: 'asc' }],
-      ...page,
-    });
-  }
-
-  contarPorComandante(commanderId: string): Promise<number> {
-    return this.prisma.battle.count({ where: this.whereComandante(commanderId) });
-  }
-
-  // ── Where helpers (privados, evitan duplicar filtros entre listar y contar) ──
-
-  private whereNombre(nombre: string): Prisma.BattleWhereInput {
-    return { name: { contains: nombre, mode: 'insensitive' } };
-  }
-
-  private whereCoordenadas(
-    lat: number,
-    lng: number,
-    radiusKm: number,
-  ): Prisma.BattleWhereInput {
-    const dLat = radiusKm / 111;
-    const cos = Math.cos((lat * Math.PI) / 180);
-    const dLng = cos === 0 ? 180 : radiusKm / (111 * Math.abs(cos));
-    return {
-      lat: { gte: lat - dLat, lte: lat + dLat },
-      lng: { gte: lng - dLng, lte: lng + dLng },
-    };
-  }
-
-  private wherePeriodo(startDate: Date, endDate: Date): Prisma.BattleWhereInput {
-    return {
-      OR: [
-        { date: { gte: startDate, lte: endDate } },
-        {
-          AND: [
-            { dateStart: { lte: endDate } },
-            { dateEnd: { gte: startDate } },
-          ],
-        },
-      ],
-    };
-  }
-
-  private whereComandante(commanderId: string): Prisma.BattleWhereInput {
-    return {
-      factions: {
-        some: {
-          commanders: { some: { commanderId } },
-        },
-      },
-    };
-  }
-
-  // Acepta id o slug para soportar URLs amigables.
-  buscarPorId(id: string): Promise<BattleWithRelations | null> {
+  // ─── Endpoint /battles/:id ─────────────────────────────────────────────
+  findByIdOrSlug(id: string): Promise<BattleWithRelations | null> {
     return this.prisma.battle.findFirst({
-      where: { OR: [{ id }, { slug: id }] },
-      include: BATTLE_DETAIL_INCLUDE,
+      where: { OR: [{ slug: id }, ...(isUuid(id) ? [{ id }] : [])] },
+      include: DETAIL_INCLUDE,
     });
   }
 
-  // "Batalla del día": elegida de forma determinista a partir del día actual,
-  // de manera que todas las peticiones del mismo día devuelven la misma.
-  // Filtra por batallas con imagen y fecha para que la portada se vea bien.
-  async buscarDelDia(): Promise<BattleWithRelations | null> {
-    const candidates = await this.prisma.battle.findMany({
-      where: {
-        date: { not: null },
-        imageUrl: { not: null },
-      },
-      orderBy: { id: 'asc' },
-      select: { id: true },
-    });
-    if (candidates.length === 0) return null;
+  // ─── WHERE compartido (filtra null coords cuando lo pedimos) ───────────
+  private buildWhere(
+    f: BattleFilters,
+    opts: { requireCoords?: boolean } = {},
+  ): Prisma.BattleWhereInput {
+    const and: Prisma.BattleWhereInput[] = [];
 
-    const epochDay = Math.floor(Date.now() / 86_400_000);
-    const picked = candidates[epochDay % candidates.length];
-    return this.prisma.battle.findUnique({
-      where: { id: picked.id },
-      include: BATTLE_DETAIL_INCLUDE,
-    });
+    // Solapamiento de rangos: [startYear, endYear] ∩ [yearMin, yearMax].
+    // Usamos year como fallback cuando no hay rango.
+    if (f.yearMin != null || f.yearMax != null) {
+      const yMin = f.yearMin ?? Number.MIN_SAFE_INTEGER;
+      const yMax = f.yearMax ?? Number.MAX_SAFE_INTEGER;
+      and.push({
+        OR: [
+          { year: { gte: yMin, lte: yMax } },
+          {
+            AND: [
+              { startYear: { lte: yMax } },
+              { endYear: { gte: yMin } },
+            ],
+          },
+        ],
+      });
+    }
+
+    if (f.bbox) {
+      and.push({
+        latitude: { gte: f.bbox.south, lte: f.bbox.north },
+        longitude: { gte: f.bbox.west, lte: f.bbox.east },
+      });
+    } else if (opts.requireCoords) {
+      and.push({ latitude: { not: null }, longitude: { not: null } });
+    }
+
+    if (f.search && f.search.trim().length > 0) {
+      and.push({ name: { contains: f.search.trim(), mode: 'insensitive' } });
+    }
+
+    if (f.minImportance != null) {
+      and.push({ importanceScore: { gte: f.minImportance } });
+    }
+
+    return and.length > 0 ? { AND: and } : {};
   }
+}
+
+function isUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 }

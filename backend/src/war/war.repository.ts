@@ -2,124 +2,76 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-const WAR_DETAIL_INCLUDE = {
+const SUMMARY_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  startYear: true,
+  endYear: true,
+  imageUrl: true,
+  region: true,
+} satisfies Prisma.WarSelect;
+
+export type WarSummary = Prisma.WarGetPayload<{ select: typeof SUMMARY_SELECT }>;
+
+const DETAIL_INCLUDE = {
   battles: {
-    orderBy: [
-      { battle: { date: 'asc' as const } },
-      { battle: { dateStart: 'asc' as const } },
-    ],
+    orderBy: { battle: { year: 'asc' as const } },
     include: {
       battle: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          date: true,
-          dateStart: true,
-          dateEnd: true,
-        },
+        select: { id: true, name: true, slug: true, year: true, latitude: true, longitude: true },
       },
-    },
-  },
-  factions: {
-    orderBy: { side: 'asc' as const },
-    include: {
-      faction: {
-        select: { id: true, name: true, slug: true, flagUrl: true },
-      },
-    },
-  },
-  commanders: {
-    orderBy: [{ side: 'asc' as const }],
-    include: {
-      commander: { select: { id: true, name: true, slug: true } },
     },
   },
 } satisfies Prisma.WarInclude;
 
-export type WarWithRelations = Prisma.WarGetPayload<{
-  include: typeof WAR_DETAIL_INCLUDE;
-}>;
+export type WarWithRelations = Prisma.WarGetPayload<{ include: typeof DETAIL_INCLUDE }>;
 
-const SIMPLIFIED_SELECT = {
-  id: true,
-  name: true,
-  slug: true,
-  dateStart: true,
-  dateEnd: true,
-  imageUrl: true,
-  wikipediaUrl: true,
-} satisfies Prisma.WarSelect;
-
-export type WarSimplified = Prisma.WarGetPayload<{
-  select: typeof SIMPLIFIED_SELECT;
-}>;
-
-type Page = { skip: number; take: number };
+export type WarFilters = {
+  search?: string;
+  yearMin?: number;
+  yearMax?: number;
+};
 
 @Injectable()
 export class WarRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  listar(page: Page): Promise<WarSimplified[]> {
+  findPaginated(filters: WarFilters, skip: number, take: number): Promise<WarSummary[]> {
     return this.prisma.war.findMany({
-      select: SIMPLIFIED_SELECT,
-      orderBy: { dateStart: 'asc' },
-      ...page,
+      where: this.buildWhere(filters),
+      select: SUMMARY_SELECT,
+      orderBy: { startYear: 'asc' },
+      skip,
+      take,
     });
   }
 
-  contar(): Promise<number> {
-    return this.prisma.war.count();
+  count(filters: WarFilters): Promise<number> {
+    return this.prisma.war.count({ where: this.buildWhere(filters) });
   }
 
-  buscarPorNombre(nombre: string, page: Page): Promise<WarSimplified[]> {
-    return this.prisma.war.findMany({
-      where: this.whereNombre(nombre),
-      select: SIMPLIFIED_SELECT,
-      orderBy: { name: 'asc' },
-      ...page,
-    });
-  }
-
-  contarPorNombre(nombre: string): Promise<number> {
-    return this.prisma.war.count({ where: this.whereNombre(nombre) });
-  }
-
-  buscarPorPeriodo(
-    startDate: Date,
-    endDate: Date,
-    page: Page,
-  ): Promise<WarSimplified[]> {
-    return this.prisma.war.findMany({
-      where: this.wherePeriodo(startDate, endDate),
-      select: SIMPLIFIED_SELECT,
-      orderBy: { dateStart: 'asc' },
-      ...page,
-    });
-  }
-
-  contarPorPeriodo(startDate: Date, endDate: Date): Promise<number> {
-    return this.prisma.war.count({ where: this.wherePeriodo(startDate, endDate) });
-  }
-
-  buscarPorId(id: string): Promise<WarWithRelations | null> {
+  findByIdOrSlug(id: string): Promise<WarWithRelations | null> {
     return this.prisma.war.findFirst({
-      where: { OR: [{ id }, { slug: id }] },
-      include: WAR_DETAIL_INCLUDE,
+      where: { OR: [{ slug: id }, ...(isUuid(id) ? [{ id }] : [])] },
+      include: DETAIL_INCLUDE,
     });
   }
 
-  private whereNombre(nombre: string): Prisma.WarWhereInput {
-    return { name: { contains: nombre, mode: 'insensitive' } };
+  private buildWhere(f: WarFilters): Prisma.WarWhereInput {
+    const and: Prisma.WarWhereInput[] = [];
+    if (f.search?.trim()) {
+      and.push({ name: { contains: f.search.trim(), mode: 'insensitive' } });
+    }
+    if (f.yearMin != null || f.yearMax != null) {
+      const yMin = f.yearMin ?? Number.MIN_SAFE_INTEGER;
+      const yMax = f.yearMax ?? Number.MAX_SAFE_INTEGER;
+      and.push({ AND: [{ startYear: { lte: yMax } }, { endYear: { gte: yMin } }] });
+    }
+    return and.length > 0 ? { AND: and } : {};
   }
+}
 
-  private wherePeriodo(startDate: Date, endDate: Date): Prisma.WarWhereInput {
-    return {
-      AND: [
-        { dateStart: { not: null, lte: endDate } },
-        { dateEnd: { not: null, gte: startDate } },
-      ],
-    };
-  }
+function isUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 }

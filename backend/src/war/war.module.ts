@@ -6,8 +6,8 @@ import { WarService } from './war.service';
 
 @Module({
   imports: [PrismaModule],
-  providers: [WarService, WarRepository],
   controllers: [WarController],
-  exports: [WarService],
+  providers: [WarService, WarRepository],
+  exports: [WarService, WarRepository],
 })
 export class WarModule {}
