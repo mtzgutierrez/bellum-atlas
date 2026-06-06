@@ -2,6 +2,13 @@
 // facciones; el bando vive como string en cada comandante).
 
 export type BattleType = 'BATTLE' | 'SIEGE' | 'CAMPAIGN'
+export type BattleSort = 'importance' | 'year' | 'name'
+
+// Nº de batallas por siglo (negativo = a.C.).
+export interface CenturyFacet {
+  century: number
+  count: number
+}
 
 // Filtros que acepta GET /battles y GET /battles/points.
 export interface BattleQuery {
@@ -11,6 +18,8 @@ export interface BattleQuery {
   yearMin?: number
   yearMax?: number
   minImportance?: number
+  type?: BattleType
+  sort?: BattleSort
   // Bounding box del mapa.
   bboxN?: number
   bboxS?: number
@@ -25,14 +34,19 @@ export interface BattleSummary {
   year: number | null
   startYear: number | null
   endYear: number | null
+  date: string | null
+  startDate: string | null
+  endDate: string | null
   latitude: number | null
   longitude: number | null
   imageUrl: string | null
+  summary: string | null
   type: BattleType
   importanceScore: number
 }
 
-// Punto ligero para el mapa (GET /battles/points).
+// Punto para el mapa (GET /battles/points): incluye imagen y fechas para la
+// lista lateral.
 export interface BattlePoint {
   id: string
   name: string
@@ -40,6 +54,12 @@ export interface BattlePoint {
   latitude: number
   longitude: number
   year: number | null
+  startYear: number | null
+  endYear: number | null
+  date: string | null
+  startDate: string | null
+  endDate: string | null
+  imageUrl: string | null
   type: BattleType
   importanceScore: number
 }

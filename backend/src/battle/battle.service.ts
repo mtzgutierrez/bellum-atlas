@@ -18,6 +18,19 @@ export class BattleService {
     return this.repo.findPoints(filters);
   }
 
+  // Efemérides: batallas de un día como hoy. `mmdd` = "-MM-DD".
+  onThisDay(mmdd: string): Promise<BattleSummary[]> {
+    return this.repo.findOnThisDay(mmdd);
+  }
+
+  timeline(limit: number): Promise<BattleSummary[]> {
+    return this.repo.findTimeline(limit);
+  }
+
+  centuries(): Promise<{ century: number; count: number }[]> {
+    return this.repo.findCenturyFacets();
+  }
+
   async list(
     filters: BattleFilters,
     p: Page,

@@ -18,6 +18,12 @@ export interface BattleAIInput {
   year: number | null;
   startYear: number | null;
   endYear: number | null;
+  date: string | null; // "YYYY-MM-DD" si hay día exacto
+  startDate: string | null;
+  endDate: string | null;
+  type: 'BATTLE' | 'SIEGE' | 'CAMPAIGN';
+  latitude: number | null;
+  longitude: number | null;
   wikipediaSummary: string | null;
 }
 

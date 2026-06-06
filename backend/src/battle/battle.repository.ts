@@ -2,15 +2,21 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-// Lo mínimo necesario para pintar un marker en Leaflet. Sin imágenes ni
-// summaries: queremos respuestas de pocos KB aunque haya miles de puntos.
+// Para pintar markers + la lista lateral del mapa: incluye imagen y fechas
+// (la ventana de 150 años acota el nº de puntos, así que el payload es razonable).
 const POINT_SELECT = {
   id: true,
   name: true,
   slug: true,
   year: true,
+  startYear: true,
+  endYear: true,
+  date: true,
+  startDate: true,
+  endDate: true,
   latitude: true,
   longitude: true,
+  imageUrl: true,
   type: true,
   importanceScore: true,
 } satisfies Prisma.BattleSelect;
@@ -24,9 +30,13 @@ const SUMMARY_SELECT = {
   year: true,
   startYear: true,
   endYear: true,
+  date: true,
+  startDate: true,
+  endDate: true,
   latitude: true,
   longitude: true,
   imageUrl: true,
+  summary: true,
   type: true,
   importanceScore: true,
 } satisfies Prisma.BattleSelect;
@@ -41,12 +51,16 @@ export type BattleWithRelations = Prisma.BattleGetPayload<{
   include: typeof DETAIL_INCLUDE;
 }>;
 
+export type BattleSort = 'importance' | 'year' | 'name';
+
 export type BattleFilters = {
   yearMin?: number;
   yearMax?: number;
   bbox?: { north: number; south: number; east: number; west: number };
   search?: string;
   minImportance?: number;
+  type?: 'BATTLE' | 'SIEGE' | 'CAMPAIGN';
+  sort?: BattleSort;
 };
 
 @Injectable()
@@ -74,7 +88,7 @@ export class BattleRepository {
     return this.prisma.battle.findMany({
       where: this.buildWhere(filters),
       select: SUMMARY_SELECT,
-      orderBy: [{ importanceScore: 'desc' }, { year: 'asc' }],
+      orderBy: orderByFor(filters.sort),
       skip,
       take,
     });
@@ -82,6 +96,47 @@ export class BattleRepository {
 
   count(filters: BattleFilters): Promise<number> {
     return this.prisma.battle.count({ where: this.buildWhere(filters) });
+  }
+
+  // ─── Efemérides: batallas cuyo día y mes coinciden con `mmdd` ("-MM-DD") ──
+  // Mira tanto `date` (evento de un día) como `startDate` (inicio de rango).
+  findOnThisDay(mmdd: string, limit = 12): Promise<BattleSummary[]> {
+    return this.prisma.battle.findMany({
+      where: {
+        OR: [{ date: { endsWith: mmdd } }, { startDate: { endsWith: mmdd } }],
+      },
+      select: SUMMARY_SELECT,
+      orderBy: { importanceScore: 'desc' },
+      take: limit,
+    });
+  }
+
+  // ─── Timeline: top batallas por importancia, sin filtro de años ─────────
+  findTimeline(limit = 150): Promise<BattleSummary[]> {
+    return this.prisma.battle.findMany({
+      select: SUMMARY_SELECT,
+      orderBy: { importanceScore: 'desc' },
+      take: limit,
+    });
+  }
+
+  // ─── Facetas: nº de batallas por siglo (para el selector del timeline) ──
+  // Siglo derivado de year ?? startYear. Negativo = a.C. Sólo siglos con datos.
+  findCenturyFacets(): Promise<{ century: number; count: number }[]> {
+    return this.prisma.$queryRaw<{ century: number; count: number }[]>`
+      SELECT century, COUNT(*)::int AS count
+      FROM (
+        SELECT CASE
+          WHEN COALESCE("year", "startYear") > 0
+            THEN CEIL(COALESCE("year", "startYear") / 100.0)
+          ELSE -CEIL(ABS(COALESCE("year", "startYear")) / 100.0)
+        END::int AS century
+        FROM "battles"
+        WHERE COALESCE("year", "startYear") IS NOT NULL
+      ) s
+      GROUP BY century
+      ORDER BY century;
+    `;
   }
 
   // ─── Endpoint /battles/:id ─────────────────────────────────────────────
@@ -134,7 +189,24 @@ export class BattleRepository {
       and.push({ importanceScore: { gte: f.minImportance } });
     }
 
+    if (f.type) {
+      and.push({ type: f.type });
+    }
+
     return and.length > 0 ? { AND: and } : {};
+  }
+}
+
+// Orden del listado según el criterio pedido (importancia por defecto).
+function orderByFor(sort?: BattleSort): Prisma.BattleOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'year':
+      return [{ year: 'asc' }, { startYear: 'asc' }, { importanceScore: 'desc' }];
+    case 'name':
+      return [{ name: 'asc' }];
+    case 'importance':
+    default:
+      return [{ importanceScore: 'desc' }, { year: 'asc' }];
   }
 }
 

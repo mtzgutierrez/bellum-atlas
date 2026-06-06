@@ -7,6 +7,7 @@ const NAV = [
   { to: '/', label: 'Inicio', exact: true },
   { to: '/map', label: 'Mapa' },
   { to: '/battles', label: 'Batallas' },
+  { to: '/timeline', label: 'Cronología' },
 ]
 
 export default function TopBar() {

@@ -14,6 +14,12 @@ export class BattlePointDto {
   @ApiProperty() latitude!: number;
   @ApiProperty() longitude!: number;
   @ApiPropertyOptional({ nullable: true }) year!: number | null;
+  @ApiPropertyOptional({ nullable: true }) startYear!: number | null;
+  @ApiPropertyOptional({ nullable: true }) endYear!: number | null;
+  @ApiPropertyOptional({ nullable: true }) date!: string | null;
+  @ApiPropertyOptional({ nullable: true }) startDate!: string | null;
+  @ApiPropertyOptional({ nullable: true }) endDate!: string | null;
+  @ApiPropertyOptional({ nullable: true }) imageUrl!: string | null;
   @ApiProperty() type!: string;
   @ApiProperty() importanceScore!: number;
 }
@@ -27,9 +33,13 @@ export class BattleSummaryDto {
   @ApiPropertyOptional({ nullable: true }) year!: number | null;
   @ApiPropertyOptional({ nullable: true }) startYear!: number | null;
   @ApiPropertyOptional({ nullable: true }) endYear!: number | null;
+  @ApiPropertyOptional({ nullable: true }) date!: string | null;
+  @ApiPropertyOptional({ nullable: true }) startDate!: string | null;
+  @ApiPropertyOptional({ nullable: true }) endDate!: string | null;
   @ApiPropertyOptional({ nullable: true }) latitude!: number | null;
   @ApiPropertyOptional({ nullable: true }) longitude!: number | null;
   @ApiPropertyOptional({ nullable: true }) imageUrl!: string | null;
+  @ApiPropertyOptional({ nullable: true }) summary!: string | null;
   @ApiProperty() type!: string;
   @ApiProperty() importanceScore!: number;
 }
@@ -86,6 +96,18 @@ export class BattlesQueryDto {
 
   @ApiPropertyOptional({ description: 'Importancia mínima (0-100)' })
   minImportance?: string;
+
+  @ApiPropertyOptional({
+    description: 'Tipo: BATTLE | SIEGE | CAMPAIGN',
+    enum: ['BATTLE', 'SIEGE', 'CAMPAIGN'],
+  })
+  type?: string;
+
+  @ApiPropertyOptional({
+    description: 'Orden: importance | year | name',
+    enum: ['importance', 'year', 'name'],
+  })
+  sort?: string;
 
   @ApiPropertyOptional({ description: 'Página' }) page?: string;
   @ApiPropertyOptional({ description: 'Tamaño página' }) pageSize?: string;

@@ -12,7 +12,12 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { normalizePagination } from '../common/pagination.dto';
-import { BattleFilters, BattleWithRelations } from './battle.repository';
+import {
+  BattleFilters,
+  BattleSort,
+  BattleSummary,
+  BattleWithRelations,
+} from './battle.repository';
 import { BattleService } from './battle.service';
 import {
   BattleDto,
@@ -43,11 +48,46 @@ export class BattleController {
         name: b.name,
         slug: b.slug,
         year: b.year,
+        startYear: b.startYear,
+        endYear: b.endYear,
+        date: b.date,
+        startDate: b.startDate,
+        endDate: b.endDate,
         latitude: b.latitude as number,
         longitude: b.longitude as number,
+        imageUrl: b.imageUrl,
         type: b.type,
         importanceScore: b.importanceScore,
       }));
+  }
+
+  // ─── /battles/on-this-day: efemérides (un día como hoy) ─────────────────
+  @Get('on-this-day')
+  @ApiOperation({ summary: 'Batallas cuyo día y mes coinciden con hoy.' })
+  @ApiOkResponse({ type: [BattleSummaryDto] })
+  async onThisDay(): Promise<BattleSummaryDto[]> {
+    const now = new Date();
+    const mmdd = `-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    const rows = await this.service.onThisDay(mmdd);
+    return rows.map(toSummary);
+  }
+
+  // ─── /battles/timeline: top batallas para la cronología ────────────────
+  @Get('timeline')
+  @ApiOperation({ summary: 'Top batallas por importancia (para el timeline).' })
+  @ApiOkResponse({ type: [BattleSummaryDto] })
+  async timeline(@Query('limit') limit?: string): Promise<BattleSummaryDto[]> {
+    const n = Number(limit);
+    const take = Number.isFinite(n) && n > 0 ? Math.min(n, 300) : 150;
+    const rows = await this.service.timeline(take);
+    return rows.map(toSummary);
+  }
+
+  // ─── /battles/centuries: nº de batallas por siglo (selector timeline) ──
+  @Get('centuries')
+  @ApiOperation({ summary: 'Recuento de batallas por siglo (con datos).' })
+  async centuries(): Promise<{ century: number; count: number }[]> {
+    return this.service.centuries();
   }
 
   // ─── /battles: listado paginado para la sidebar ────────────────────────
@@ -59,21 +99,7 @@ export class BattleController {
     const { page, pageSize } = normalizePagination(q);
     const result = await this.service.list(filters, { page, pageSize });
     return {
-      data: result.data.map(
-        (b): BattleSummaryDto => ({
-          id: b.id,
-          name: b.name,
-          slug: b.slug,
-          year: b.year,
-          startYear: b.startYear,
-          endYear: b.endYear,
-          latitude: b.latitude,
-          longitude: b.longitude,
-          imageUrl: b.imageUrl,
-          type: b.type,
-          importanceScore: b.importanceScore,
-        }),
-      ),
+      data: result.data.map(toSummary),
       meta: result.meta,
     };
   }
@@ -118,13 +144,48 @@ function parseFilters(q: BattlesQueryDto): BattleFilters {
     [n, s, e, w].every((v) => v != null && Number.isFinite(v as number))
       ? { north: n!, south: s!, east: e!, west: w! }
       : undefined;
+  const type =
+    q.type === 'BATTLE' || q.type === 'SIEGE' || q.type === 'CAMPAIGN'
+      ? q.type
+      : undefined;
+  const sort: BattleSort | undefined =
+    q.sort === 'year' || q.sort === 'name' || q.sort === 'importance'
+      ? q.sort
+      : undefined;
   return {
     yearMin: Number.isFinite(yearMin) ? yearMin : undefined,
     yearMax: Number.isFinite(yearMax) ? yearMax : undefined,
     minImportance: Number.isFinite(minImportance) ? minImportance : undefined,
     bbox,
     search: q.search,
+    type,
+    sort,
   };
+}
+
+// Mapea la fila de BD a la DTO de resumen (lista, efemérides, timeline).
+function toSummary(b: BattleSummary): BattleSummaryDto {
+  return {
+    id: b.id,
+    name: b.name,
+    slug: b.slug,
+    year: b.year,
+    startYear: b.startYear,
+    endYear: b.endYear,
+    date: b.date,
+    startDate: b.startDate,
+    endDate: b.endDate,
+    latitude: b.latitude,
+    longitude: b.longitude,
+    imageUrl: b.imageUrl,
+    summary: b.summary,
+    type: b.type,
+    importanceScore: b.importanceScore,
+  };
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
 }
 
 function toDto(b: BattleWithRelations): BattleDto {

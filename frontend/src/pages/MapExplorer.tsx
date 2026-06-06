@@ -8,7 +8,7 @@ import { useApiFetch } from '../hooks/useApiFetch'
 import { useDebounce } from '../hooks/useDebounce'
 import { battleService } from '../services/battle.service'
 import type { BattlePoint } from '../services/battle.types'
-import { formatYear } from '../utils/dates'
+import { formatBattleDates } from '../utils/dates'
 
 const YEAR_MIN = -3000
 const YEAR_MAX = new Date().getFullYear()
@@ -145,6 +145,12 @@ export default function MapExplorer() {
       latitude: focusBattle.latitude,
       longitude: focusBattle.longitude,
       year: focusBattle.year,
+      startYear: focusBattle.startYear,
+      endYear: focusBattle.endYear,
+      date: focusBattle.date,
+      startDate: focusBattle.startDate,
+      endDate: focusBattle.endDate,
+      imageUrl: focusBattle.imageUrl,
       type: focusBattle.type,
       importanceScore: focusBattle.importanceScore,
     }
@@ -273,12 +279,12 @@ export default function MapExplorer() {
               onDoubleClick={() => navigate(`/battles/${b.slug}`)}
             >
               <div className="map-result-thumb">
-                <SmartImage src={null} alt={b.name} type={b.type} />
+                <SmartImage src={b.imageUrl} alt={b.name} type={b.type} />
               </div>
               <div className="map-result-body">
                 <h4 className="map-result-name">{b.name}</h4>
                 <div className="map-result-meta">
-                  <span>{formatYear(b.year)}</span>
+                  <span>{formatBattleDates(b)}</span>
                   <span className="dot">·</span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                     <TypeIcon type={b.type} size={10} /> {TYPE_LABEL[b.type] ?? '—'}
@@ -312,7 +318,7 @@ function buildPopup(b: BattlePoint): string {
     (s ?? '').replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
     )
-  const year = formatYear(b.year)
+  const year = formatBattleDates(b)
   const type = TYPE_LABEL[b.type] ?? '—'
   return `
     <div class="popup-content">

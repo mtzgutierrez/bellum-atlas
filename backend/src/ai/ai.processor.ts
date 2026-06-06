@@ -46,6 +46,12 @@ export class AiProcessor extends WorkerHost {
       year: battle.year,
       startYear: battle.startYear,
       endYear: battle.endYear,
+      date: battle.date,
+      startDate: battle.startDate,
+      endDate: battle.endDate,
+      type: battle.type,
+      latitude: battle.latitude,
+      longitude: battle.longitude,
       wikipediaSummary: battle.summary,
     };
 

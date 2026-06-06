@@ -4,6 +4,7 @@ import BattleDetail from './pages/BattleDetail'
 import Battles from './pages/Battles'
 import Home from './pages/Home'
 import MapExplorer from './pages/MapExplorer'
+import Timeline from './pages/Timeline'
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="/map" element={<MapExplorer />} />
           <Route path="/battles" element={<Battles />} />
           <Route path="/battles/:id" element={<BattleDetail />} />
+          <Route path="/timeline" element={<Timeline />} />
         </Routes>
       </div>
     </BrowserRouter>

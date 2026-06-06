@@ -104,18 +104,35 @@ Reglas:
 
 Devuelve SOLO el JSON, sin texto antes ni después, sin code fences.`;
 
+const TYPE_LABEL: Record<BattleAIInput['type'], string> = {
+  BATTLE: 'Batalla',
+  SIEGE: 'Asedio',
+  CAMPAIGN: 'Campaña militar',
+};
+
 function buildUserPrompt(i: BattleAIInput): string {
   const lines = [
-    `Batalla: ${i.name}`,
-    i.year != null ? `Año: ${i.year}` : null,
-    i.startYear != null && i.endYear != null
-      ? `Rango: ${i.startYear}-${i.endYear}`
+    `Nombre: ${i.name}`,
+    `Tipo: ${TYPE_LABEL[i.type]}`,
+    fechaLine(i),
+    i.latitude != null && i.longitude != null
+      ? `Ubicación (coordenadas lat, lon): ${i.latitude.toFixed(4)}, ${i.longitude.toFixed(4)}`
       : null,
     i.wikipediaSummary
       ? `\nResumen de Wikipedia (referencia, puede tener errores):\n${i.wikipediaSummary}`
       : null,
   ].filter((l): l is string => l != null);
   return lines.join('\n');
+}
+
+// Prioriza la fecha exacta (día) si la tenemos; si no, el año o el rango.
+function fechaLine(i: BattleAIInput): string | null {
+  if (i.startDate && i.endDate) return `Fechas: del ${i.startDate} al ${i.endDate}`;
+  if (i.date) return `Fecha: ${i.date}`;
+  if (i.startDate) return `Inicio: ${i.startDate}`;
+  if (i.year != null) return `Año: ${i.year}`;
+  if (i.startYear != null && i.endYear != null) return `Rango: ${i.startYear}-${i.endYear}`;
+  return null;
 }
 
 function parseStoryJson(text: string): AIStory {
