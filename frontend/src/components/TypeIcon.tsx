@@ -2,11 +2,9 @@ import type { BattleType } from '../services/battle.types'
 import Icon from './Icon'
 
 const NAME: Record<BattleType, string> = {
-  LAND: 'swords',
-  NAVAL: 'anchor',
-  AIR: 'plane',
+  BATTLE: 'sword',
   SIEGE: 'castle',
-  MIXED: 'flag',
+  CAMPAIGN: 'flag',
 }
 
 export default function TypeIcon({

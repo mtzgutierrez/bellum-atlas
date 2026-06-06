@@ -1,16 +1,16 @@
 # Backend — Visión general
 
-El backend es una API REST construida con **NestJS** y **Prisma** que expone los datos de batallas históricas al frontend y recibe los datos del scraper a través de un endpoint interno protegido.
+API REST con **NestJS** y **Prisma** que expone las batallas al frontend,
+ingiere datos de Wikidata/Wikipedia y genera la narrativa por IA en background.
 
 ---
 
 ## Responsabilidades
 
-- Exponer la API REST consumida por el frontend
-- Validar, deduplicar y persistir los datos enviados por el scraper
-- Ejecutar búsqueda full-text con `tsvector` de PostgreSQL
-- Gestionar la autenticación JWT
-- Cachear respuestas frecuentes en Redis
+- Exponer la API REST consumida por el frontend (batallas, mapa, IA).
+- Ingerir y normalizar datos desde Wikidata + Wikipedia (CLI).
+- Generar y cachear la narrativa por IA con workers (BullMQ + Redis).
+- Autenticación ligera por JWT (tier free/premium).
 
 ---
 
@@ -20,25 +20,21 @@ El backend es una API REST construida con **NestJS** y **Prisma** que expone los
 backend/src/
 ├── app.module.ts
 ├── main.ts
-├── prisma/
-│   └── prisma.service.ts        # Wrapper del cliente Prisma
-├── battles/
-│   ├── battles.module.ts
-│   ├── battles.controller.ts
-│   └── battles.service.ts
-├── wars/
-│   ├── wars.module.ts
-│   └── ...
-├── commanders/
-│   └── ...
-├── locations/
-│   └── ...
-
+├── prisma/          # cliente Prisma (global)
+├── battle/          # lectura de batallas y puntos del mapa
+├── ai/              # endpoint Premium + worker + LLM
+├── auth/            # JWT y guard premium
+├── ingestion/       # cliente Wikidata/Wikipedia + servicio de ingesta
+├── health/
+├── seed.ts          # seed offline (3 batallas)
+└── ingest.ts        # CLI de ingesta
 ```
 
 ---
 
 ## Secciones del backend
 
-- [Módulos NestJS](modulos.md) — Descripción de cada módulo y sus responsabilidades
-- [API Reference](api.md) — Endpoints disponibles con ejemplos de petición/respuesta
+- [Módulos NestJS](modulos.md)
+- [API Reference](api.md)
+- [Ingesta (Wikidata)](ingesta.md)
+- [IA (LLM)](ia.md)

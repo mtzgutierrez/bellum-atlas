@@ -1,84 +1,65 @@
-export type BattleType = 'LAND' | 'NAVAL' | 'AIR' | 'SIEGE' | 'MIXED'
+// Contrato alineado con el backend "Historical Atlas" (años Int, sin
+// facciones; el bando vive como string en cada comandante).
+
+export type BattleType = 'BATTLE' | 'SIEGE' | 'CAMPAIGN'
+
+// Filtros que acepta GET /battles y GET /battles/points.
+export interface BattleQuery {
+  page?: number
+  pageSize?: number
+  search?: string
+  yearMin?: number
+  yearMax?: number
+  minImportance?: number
+  // Bounding box del mapa.
+  bboxN?: number
+  bboxS?: number
+  bboxE?: number
+  bboxW?: number
+}
 
 export interface BattleSummary {
   id: string
   name: string
   slug: string
-  date: string | null
-  dateStart: string | null
-  dateEnd: string | null
-  locationName: string | null
-  country: string | null
+  year: number | null
+  startYear: number | null
+  endYear: number | null
   latitude: number | null
   longitude: number | null
-  type: BattleType | null
   imageUrl: string | null
-  wikipediaUrl: string | null
+  type: BattleType
+  importanceScore: number
 }
 
-export interface BattleWarRef {
+// Punto ligero para el mapa (GET /battles/points).
+export interface BattlePoint {
   id: string
   name: string
   slug: string
-}
-
-export interface BattleCommanderRef {
-  id: string
-  name: string
-  slug: string
-}
-
-export interface BattleFaction {
-  id: string
-  name: string
-  slug: string
-  flagUrl: string | null
-  side: number | null
-  outcome: string | null
-  strength: string | null
-  deaths: string | null
-  injured: string | null
-  commanders: BattleCommanderRef[]
-}
-
-export interface BattleMedia {
-  id: string
-  url: string
-  type: string
-  caption: string | null
+  latitude: number
+  longitude: number
+  year: number | null
+  type: BattleType
+  importanceScore: number
 }
 
 export interface BattleDetail {
   id: string
   name: string
   slug: string
-  description: string | null
-  summary: string | null
-  date: string | null
-  dateStart: string | null
-  dateEnd: string | null
-  locationName: string | null
-  country: string | null
+  year: number | null
+  startYear: number | null
+  endYear: number | null
+  date: string | null // "YYYY-MM-DD" si hay día exacto
+  startDate: string | null
+  endDate: string | null
   latitude: number | null
   longitude: number | null
-  deaths: number | null
-  casualties: number | null
   imageUrl: string | null
-  mapImageUrl: string | null
   wikipediaUrl: string | null
-  type: string | null
-  wars: BattleWarRef[]
-  factions: BattleFaction[]
-  media: BattleMedia[]
-}
-
-export interface CoordinatesQuery {
-  latitude: number
-  longitude: number
-  radius: number
-}
-
-export interface TimePeriodQuery {
-  startDate: string
-  endDate: string
+  summary: string | null
+  type: BattleType
+  importanceScore: number
+  hasAiStory: boolean
 }

@@ -2,11 +2,9 @@ import { useState } from 'react'
 import type { BattleType } from '../services/battle.types'
 
 export const TYPE_LABEL: Record<BattleType, string> = {
-  LAND: 'Terrestre',
-  NAVAL: 'Naval',
-  AIR: 'Aérea',
+  BATTLE: 'Batalla',
   SIEGE: 'Asedio',
-  MIXED: 'Combinada',
+  CAMPAIGN: 'Campaña',
 }
 
 interface ImageFallbackProps {
@@ -19,19 +17,6 @@ export function ImageFallback({ type, label }: ImageFallbackProps) {
   return (
     <div className="img-fallback" role="img" aria-label="Imagen no disponible">
       <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        {type === 'NAVAL' && (
-          <g stroke="currentColor" fill="none" strokeWidth="1.4">
-            <circle cx="50" cy="35" r="6" />
-            <line x1="50" y1="41" x2="50" y2="78" />
-            <path d="M28 60 a 22 22 0 0 0 44 0" />
-            <line x1="30" y1="78" x2="70" y2="78" />
-          </g>
-        )}
-        {type === 'AIR' && (
-          <g stroke="currentColor" fill="none" strokeWidth="1.4">
-            <path d="M22 58 L78 58 M50 20 L50 80 M30 40 L70 40 M36 70 L64 70" />
-          </g>
-        )}
         {type === 'SIEGE' && (
           <g stroke="currentColor" fill="none" strokeWidth="1.4">
             <path d="M20 75 V40 L28 45 V35 L36 40 V35 L44 40 V35 L52 40 V35 L60 40 V35 L68 45 V40 L76 35 V75 Z" />
@@ -39,7 +24,14 @@ export function ImageFallback({ type, label }: ImageFallbackProps) {
             <rect x="44" y="55" width="12" height="20" />
           </g>
         )}
-        {(!type || type === 'LAND' || type === 'MIXED') && (
+        {type === 'CAMPAIGN' && (
+          <g stroke="currentColor" fill="none" strokeWidth="1.4">
+            <path d="M24 70 L44 40 L56 58 L76 28" />
+            <path d="M68 28 L76 28 L76 36" />
+            <line x1="20" y1="80" x2="80" y2="80" />
+          </g>
+        )}
+        {(!type || type === 'BATTLE') && (
           <g stroke="currentColor" fill="none" strokeWidth="1.4">
             <path d="M30 30 L70 70 M70 30 L30 70" />
             <circle cx="50" cy="50" r="22" />

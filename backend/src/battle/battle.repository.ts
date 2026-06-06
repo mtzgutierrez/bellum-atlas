@@ -34,16 +34,6 @@ const SUMMARY_SELECT = {
 export type BattleSummary = Prisma.BattleGetPayload<{ select: typeof SUMMARY_SELECT }>;
 
 const DETAIL_INCLUDE = {
-  wars: {
-    include: {
-      war: { select: { id: true, name: true, slug: true } },
-    },
-  },
-  commanders: {
-    include: {
-      commander: { select: { id: true, name: true, slug: true } },
-    },
-  },
   aiSummary: { select: { id: true } },
 } satisfies Prisma.BattleInclude;
 

@@ -14,130 +14,95 @@ Listado paginado con búsqueda y filtros.
 
 | Param | Tipo | Descripción |
 |---|---|---|
-| `q` | string | Búsqueda full-text |
-| `era` | string | Slug de era (`ancient`, `medieval`, `modern`…) |
-| `result` | string | `victory` \| `defeat` \| `draw` \| `inconclusive` |
-| `type` | string | `land` \| `naval` \| `air` \| `siege` |
-| `country` | string | País involucrado |
+| `search` | string | Búsqueda por nombre (substring) |
+| `yearMin` / `yearMax` | number | Rango de años (Int) |
+| `minImportance` | number | `importanceScore` mínimo (0-100) |
+| `bboxN`/`bboxS`/`bboxE`/`bboxW` | number | Bounding box geográfico |
 | `page` | number | Página (default: 1) |
-| `limit` | number | Items por página (default: 20, max: 100) |
-| `sortBy` | string | `date` \| `name` \| `casualties` (default: `date`) |
+| `pageSize` | number | Items por página (default: 20, max: 50) |
+
+!!! warning "Límite de rango: 150 años"
+    Si se envían **ambos** `yearMin` y `yearMax`, el lapso no puede superar
+    **150 años**; en otro caso la API responde `400 Bad Request`. Evita
+    consultas que devuelvan miles de batallas y ralenticen el cliente.
 
 **Ejemplo**:
 ```
-GET /battles?q=Waterloo&result=victory&page=1&limit=20
+GET /battles?search=Waterloo&yearMin=1750&yearMax=1850&page=1&pageSize=20
 ```
 
-**Respuesta** `200 OK`:
-```json
-{
-  "data": [
-    {
-      "id": "clx...",
-      "name": "Batalla de Waterloo",
-      "date": "1815-06-18",
-      "result": "victory",
-      "war": { "id": "...", "name": "Guerra de los Cien Días" },
-      "location": { "name": "Waterloo", "country": "Bélgica", "lat": 50.68, "lon": 4.41 }
-    }
-  ],
-  "meta": { "total": 1, "page": 1, "limit": 20, "totalPages": 1 }
-}
+**Respuesta** `200 OK`: `{ data: BattleSummary[], meta: { total, page, pageSize, totalPages } }`.
+
+---
+
+### `GET /battles/points`
+
+Puntos ligeros para el mapa (sin paginar, capado a 10.000). Mismos filtros que
+`GET /battles` y **el mismo límite de 150 años** en el rango. Pensado para que
+el mapa cargue siempre una ventana temporal acotada.
+
+```
+GET /battles/points?yearMin=1850&yearMax=2000
 ```
 
 ---
 
 ### `GET /battles/:id`
 
-Ficha completa de una batalla.
+Ficha de una batalla por id o slug.
 
 **Respuesta** `200 OK`:
 ```json
 {
-  "id": "clx...",
-  "name": "Batalla de Waterloo",
-  "date": "1815-06-18",
-  "result": "victory",
-  "description": "...",
-  "wikipediaUrl": "https://es.wikipedia.org/wiki/Batalla_de_Waterloo",
-  "war": { "id": "...", "name": "Guerra de los Cien Días" },
-  "location": { "lat": 50.68, "lon": 4.41, "name": "Waterloo", "country": "Bélgica" },
-  "factions": [
-    {
-      "name": "Séptima Coalición",
-      "role": "attacker",
-      "result": "victory",
-      "estimatedCasualties": 22000,
-      "commanders": [{ "id": "...", "name": "Arthur Wellesley" }]
-    }
-  ],
-  "relatedBattles": [...]
+  "id": "uuid",
+  "name": "Batalla de Trafalgar",
+  "slug": "batalla-de-trafalgar",
+  "year": 1805,
+  "startYear": null,
+  "endYear": null,
+  "latitude": 36.28,
+  "longitude": -6.27,
+  "imageUrl": "https://upload.wikimedia.org/.../800px-Trafalgar-Auguste_Mayer.jpg",
+  "wikipediaUrl": "https://es.wikipedia.org/wiki/Batalla_de_Trafalgar",
+  "summary": "La batalla de Trafalgar fue una batalla naval…",
+  "type": "BATTLE",
+  "importanceScore": 78,
+  "hasAiStory": false
 }
 ```
 
 ---
 
-## Guerras
+## IA (Premium)
 
-### `GET /wars`
+### `GET /battles/:id/ai-story`
 
-```
-GET /wars?q=napoleonicas&page=1&limit=20
-```
+Narrativa generada por IA. Requiere **JWT con tier premium** (`Authorization:
+Bearer …`). Ver [IA (LLM)](ia.md).
 
-### `GET /wars/:id`
-
-Devuelve la ficha de guerra con la lista de batallas ordenadas cronológicamente y estadísticas agregadas (`totalBattles`, `totalCasualties`, `durationDays`).
-
----
-
-## Comandantes
-
-### `GET /commanders/:id`
-
-```json
-{
-  "id": "...",
-  "name": "Arthur Wellesley",
-  "country": "Reino Unido",
-  "birthYear": 1769,
-  "deathYear": 1852,
-  "battles": [
-    { "id": "...", "name": "Batalla de Waterloo", "date": "1815-06-18", "personalResult": "victory" }
-  ],
-  "stats": { "total": 24, "victories": 19, "winRate": 0.79 }
-}
-```
+- `200 OK` → `{ summary, context, outcome, curiosities, modelUsed, generatedAt }`
+- `202 Accepted` → `{ status: "pending", queuePosition? }` (se encoló; nunca
+  llama al LLM en línea)
+- `401` sin token · `403` con tier free
 
 ---
 
 ## Autenticación
 
-### `POST /auth/register`
+### `POST /auth/dev-token`
+
+Sólo en `NODE_ENV=development`. Emite un JWT con el tier pedido para probar el
+gating Premium.
 
 ```json
-{ "email": "user@example.com", "password": "password123" }
+{ "tier": "premium" }   // o "free"
 ```
-
-### `POST /auth/login`
-
-```json
-{ "email": "user@example.com", "password": "password123" }
-```
-
-Respuesta:
-```json
-{ "access_token": "eyJ..." }
-```
-
-El `refresh_token` se establece automáticamente en una cookie `httpOnly`.
+Respuesta: `{ "token": "eyJ…", "tier": "premium" }`.
 
 ---
 
-## Internal (solo scraper)
+## Health
 
-### `POST /internal/scraper/battle`
+### `GET /health`
 
-**Headers**: `x-api-key: <SCRAPER_API_KEY>`
-
-**Body**: objeto `WikipediaItem` normalizado. Hace `upsert` por `wikipediaUrl`.
+Estado del servicio y conectividad con la base de datos.

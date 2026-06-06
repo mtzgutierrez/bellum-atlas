@@ -1,18 +1,19 @@
 # Frontend — Visión general
 
-El frontend es una SPA construida con **React 19 + Vite + TypeScript**. Consume datos de un módulo de mock tipado y está preparado para conectar con la API REST del backend.
+SPA con **React 19 + Vite + TypeScript**. Consume la API REST del backend a
+través del proxy `/api` (ver `vite.config.ts`).
 
 ---
 
 ## Stack
 
-| Librería | Versión | Uso |
-|---|---|---|
-| React | 19.x | UI con hooks |
-| Vite | 8.x | Bundler y dev server |
-| TypeScript | 5.x | Tipado estático |
-| react-router-dom | 7.x | Enrutado SPA |
-| CSS Custom Properties | — | Design system (sin frameworks) |
+| Librería | Uso |
+|---|---|
+| React 19 | UI con hooks |
+| Vite | Bundler y dev server |
+| react-router-dom | Enrutado SPA |
+| Leaflet | Mapa y mini-mapas |
+| CSS custom properties | Design system (sin frameworks) |
 
 ---
 
@@ -20,64 +21,39 @@ El frontend es una SPA construida con **React 19 + Vite + TypeScript**. Consume 
 
 ```
 frontend/src/
-├── components/          # Componentes reutilizables
-│   ├── Icon.tsx         # 40+ iconos SVG inline (sword, anchor, plane…)
-│   ├── Logo.tsx         # Logotipo ARES·CODEX con espada dorada
-│   ├── TopBar.tsx       # TopBarDesktop + TopBarMobile
-│   ├── BottomNav.tsx    # Barra de navegación móvil (5 items)
-│   ├── BattleCard.tsx   # Tarjeta de batalla con badge de resultado
-│   ├── ResultBadge.tsx  # Badge Victoria / Derrota / Empate / Indeciso
-│   ├── TypeIcon.tsx     # Icono según tipo de batalla (terrestre/naval…)
-│   ├── MapBackdrop.tsx  # Fondo de mapa topográfico SVG
-│   ├── MapPin.tsx       # Pin de batalla con color por resultado
-│   ├── MapCluster.tsx   # Cluster circular con contador
-│   ├── FactionColumn.tsx# Columna de bando (comandantes, efectivos, bajas)
-│   └── StatBlock.tsx    # Bloque estadístico (número grande + etiqueta)
-│
-├── pages/               # Páginas (funciones)
-│   ├── Home.tsx         # HomeDesktop (Variante B cinematic) + HomeMobile
-│   ├── Catalog.tsx      # CatalogDesktop + CatalogMobile
-│   ├── BattleDetail.tsx # BattleDetailDesktop + BattleDetailMobile
-│   ├── Wars.tsx         # WarsListDesktop + WarDetailDesktop + WarsMobile
-│   ├── Timeline.tsx     # TimelineDesktop + TimelineMobile
-│   ├── Commanders.tsx   # CommandersListDesktop + CommanderDetailDesktop + CommandersMobile
-│   └── MapExplorer.tsx  # MapExplorerDesktop + MapExplorerMobile
-│
-├── data/
-│   └── mock.ts          # Datos históricos tipados (18 batallas, 8 comandantes, 3 guerras)
-│
-├── App.tsx              # Router principal (BrowserRouter + Routes)
-├── main.tsx             # Entry point
-└── index.css            # Design tokens + clases utilitarias ax-*
+├── components/
+│   ├── Icon.tsx          # iconos SVG inline
+│   ├── TopBar.tsx        # navegación + toggle Free/Premium
+│   ├── BattleCard.tsx    # tarjeta de batalla (imagen, tipo, año)
+│   ├── TypeIcon.tsx      # icono por tipo (BATTLE/SIEGE/CAMPAIGN)
+│   ├── SmartImage.tsx    # imagen con fallback temático
+│   └── BattleMiniMap.tsx # mini-mapa Leaflet de una batalla
+├── pages/
+│   ├── Home.tsx          # hero + batallas destacadas
+│   ├── Battles.tsx       # catálogo paginado
+│   ├── BattleDetail.tsx  # ficha rica + narrativa IA (Premium)
+│   └── MapExplorer.tsx   # mapa a pantalla completa
+├── services/             # cliente API: battle, ai, auth
+├── hooks/                # useApiFetch, useDebounce…
+├── data/eras.ts          # presets de época (<=150 años)
+├── App.tsx               # rutas
+└── main.tsx
 ```
 
 ---
 
-## Páginas
+## Rutas
 
 | Ruta | Componente | Descripción |
 |---|---|---|
-| `/` | `Home` | Hero cinematográfico (Lepanto), contadores, 3 entry points |
-| `/battles` | `Catalog` | Búsqueda full-text, sidebar de filtros, lista de batallas |
-| `/battles/:id` | `BattleDetail` | Hero con breadcrumb, stats strip, facciones VS, batallas relacionadas |
-| `/wars` | `Wars` | Lista de guerras con tabla de estadísticas |
-| `/wars/:id` | `WarDetailDesktop` | Detalle de guerra con batallas asociadas |
-| `/commanders` | `Commanders` | Grid de comandantes con retrato engraving |
-| `/commanders/:id` | `CommanderDetailDesktop` | Perfil con arco de carrera y ratio W/L |
-| `/timeline` | `Timeline` | Feed cronológico con línea de oro, agrupado por siglo |
-| `/map` | `MapExplorer` | Mapa full-screen con pins filtrados, clusters, popup de batalla |
-
----
-
-## Design system
-
-El sistema visual se basa en CSS custom properties definidas en `index.css`. Sin Tailwind. Sin border-radius > 4px. Paleta oscura con crimson y gold como colores de acento.
-
-Ver [Guía de estilos](../guia-estilos.md) para la documentación completa.
+| `/` | `Home` | Hero + batallas destacadas |
+| `/battles` | `Battles` | Catálogo con búsqueda y filtro de época |
+| `/battles/:id` | `BattleDetail` | Ficha rica + narrativa IA (Premium) |
+| `/map` | `MapExplorer` | Mapa con ventana temporal de 150 años |
 
 ---
 
 ## Secciones
 
-- [Páginas](paginas.md) — Descripción detallada de cada página
-- [Map Explorer](mapa.md) — Arquitectura del mapa interactivo
+- [Páginas](paginas.md)
+- [Map Explorer](mapa.md)

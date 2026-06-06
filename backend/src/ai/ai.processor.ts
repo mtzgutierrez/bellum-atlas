@@ -35,12 +35,6 @@ export class AiProcessor extends WorkerHost {
 
     const battle = await this.prisma.battle.findUnique({
       where: { id: battleId },
-      include: {
-        wars: { include: { war: { select: { name: true } } }, take: 1 },
-        commanders: {
-          include: { commander: { select: { name: true } } },
-        },
-      },
     });
     if (!battle) {
       this.logger.warn(`Battle ${battleId} no encontrada (descartado).`);
@@ -52,12 +46,6 @@ export class AiProcessor extends WorkerHost {
       year: battle.year,
       startYear: battle.startYear,
       endYear: battle.endYear,
-      locationHint: null,
-      warName: battle.wars[0]?.war.name ?? null,
-      commanders: battle.commanders.map((bc) => ({
-        name: bc.commander.name,
-        side: bc.side,
-      })),
       wikipediaSummary: battle.summary,
     };
 

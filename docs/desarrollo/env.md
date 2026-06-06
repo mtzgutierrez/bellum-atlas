@@ -1,64 +1,50 @@
 # Variables de entorno
 
----
-
-## Backend (`backend/.env`)
-
-```env
-# Base de datos
-DATABASE_URL="postgresql://ares:password@localhost:5432/arescodex"
-
-# Redis
-REDIS_URL="redis://localhost:6379"
-
-# JWT
-JWT_SECRET="tu-secreto-muy-largo-y-aleatorio"
-JWT_EXPIRY="15m"
-JWT_REFRESH_SECRET="tu-otro-secreto-diferente"
-JWT_REFRESH_EXPIRY="7d"
-
-# Clave interna para el scraper
-SCRAPER_API_KEY="clave-interna-para-el-scraper"
-
-# Entorno
-NODE_ENV="development"
-PORT=3000
-```
-
----
-
-## Scraper (`scraper/.env`)
+Hay **un solo** fichero `.env` en la raíz del proyecto (cópialo de
+`.env.example`). Docker Compose lo inyecta a los servicios.
 
 ```env
-# URL de la API del backend
-BACKEND_URL="http://localhost:3000"
+# General
+NODE_ENV=development
+COMPOSE_PROJECT_NAME=ares_codex_app
 
-# Misma clave que SCRAPER_API_KEY en el backend
-SCRAPER_API_KEY="clave-interna-para-el-scraper"
+# PostgreSQL
+POSTGRES_DB=ares_db
+POSTGRES_USER=ares_user
+POSTGRES_PASSWORD=ares_pass
+POSTGRES_PORT=5432
+POSTGRES_HOST=postgres
+DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?schema=public"
 
-# Redis para el set de URLs procesadas
-REDIS_URL="redis://localhost:6379"
+# Backend
+BACKEND_PORT=3000
+JWT_SECRET=genera_un_secreto_aleatorio_aqui
+JWT_EXPIRATION=7d
+
+# Redis (caché + colas BullMQ)
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# IA / LLM (ver backend/ia.md)
+AI_PROVIDER=mock            # mock | anthropic
+ANTHROPIC_API_KEY=          # sólo si AI_PROVIDER=anthropic
+AI_MODEL=claude-sonnet-4-6
+AI_AUTO_QUEUE_MIN_SCORE=80
+
+# Frontend
+FRONTEND_PORT=5173
+VITE_API_URL=http://localhost:3000
 ```
 
----
+| Variable | Para qué |
+|----------|----------|
+| `AI_PROVIDER` | `mock` (sin coste) o `anthropic` (Claude). |
+| `ANTHROPIC_API_KEY` | Clave de Anthropic si usas Claude. |
+| `AI_MODEL` | Modelo de Claude. |
+| `AI_AUTO_QUEUE_MIN_SCORE` | Umbral de `importanceScore` para pre-generar IA. |
+| `JWT_SECRET` | Firma de los JWT (tier free/premium). |
 
-## Frontend (`frontend/.env`)
-
-```env
-# URL base de la API
-VITE_API_URL="http://localhost:3000"
-
-# Token público de Mapbox
-VITE_MAPBOX_TOKEN="pk.eyJ1Ijoi..."
-```
-
-!!! warning "Token de Mapbox"
-    El token de Mapbox es público (empieza por `pk.`) pero está ligado a tu cuenta. Restringe los dominios permitidos desde el panel de Mapbox para evitar uso no autorizado.
-
----
-
-## Producción
-
-En producción (Railway / Fly.io) las variables se configuran en el panel del proveedor, no en archivos `.env`. Nunca subas archivos `.env` al repositorio.
-
-El `.gitignore` ya excluye `*.env` y `.env.*`.
+!!! warning "Secretos"
+    Nunca subas tu `.env` al repositorio. El `.gitignore` ya excluye `.env`.
+    Para usar Claude de verdad, pon `AI_PROVIDER=anthropic` y tu
+    `ANTHROPIC_API_KEY`, y reinicia el backend.

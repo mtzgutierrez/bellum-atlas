@@ -21,10 +21,16 @@ model Battle {
   name            String
   slug            String     @unique
 
-  // Años (suficiente para timeline; fechas exactas eran ruido).
+  // Años para el timeline y los filtros.
   year            Int?
   startYear       Int?
   endYear         Int?
+
+  // Fecha exacta (ISO "YYYY-MM-DD", con signo para a.C.) cuando Wikidata la
+  // tiene a precisión de día. `date` = evento de un día; start/end = rango.
+  date            String?
+  startDate       String?
+  endDate         String?
 
   // Geo. Sin PostGIS: bbox queries con índice compuesto (lat, lng).
   latitude        Float?
@@ -44,79 +50,12 @@ model Battle {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  wars            BattleWar[]
-  commanders      BattleCommander[]
   aiSummary       BattleAISummary?
 
   @@index([year])
   @@index([latitude, longitude])
   @@index([importanceScore])
   @@map("battles")
-}
-
-model War {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  wikidataId   String?  @unique
-  name         String
-  slug         String   @unique
-  startYear    Int?
-  endYear      Int?
-  imageUrl     String?
-  wikipediaUrl String?
-  summary      String?
-  region       String?
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  battles      BattleWar[]
-
-  @@index([startYear])
-  @@map("wars")
-}
-
-model Commander {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  wikidataId   String?  @unique
-  name         String
-  slug         String   @unique
-  birthYear    Int?
-  deathYear    Int?
-  imageUrl     String?
-  wikipediaUrl String?
-  summary      String?
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  battles      BattleCommander[]
-
-  @@map("commanders")
-}
-
-model BattleWar {
-  battleId String @db.Uuid
-  warId    String @db.Uuid
-
-  battle   Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
-  war      War    @relation(fields: [warId], references: [id], onDelete: Cascade)
-
-  @@id([battleId, warId])
-  @@index([warId])
-  @@map("battle_wars")
-}
-
-model BattleCommander {
-  battleId    String  @db.Uuid
-  commanderId String  @db.Uuid
-  side        String?       // "Aliados"/"Eje"/"1"/"2"... libre
-
-  battle      Battle    @relation(fields: [battleId],    references: [id], onDelete: Cascade)
-  commander   Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
-
-  @@id([battleId, commanderId])
-  @@index([commanderId])
-  @@map("battle_commanders")
 }
 
 // ─── CACHÉ PERMANENTE DE IA ────────────────────────────────────────────────

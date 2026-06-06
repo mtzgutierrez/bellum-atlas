@@ -1,142 +1,143 @@
 /* eslint-disable no-console */
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { WikidataModule } from './wikidata/wikidata.module';
-import { WikidataService } from './wikidata/wikidata.service';
-import type { BulkOpts } from './wikidata/wikidata.service';
+import { AiQueueService } from './ai/ai-queue.service';
+import { AppModule } from './app.module';
+import { toSlug } from './common/utils/slug.util';
+import { PrismaService } from './prisma/prisma.service';
 
-type SingleType = 'battle' | 'war' | 'commander' | 'war-tree';
-type BulkType = 'all-battles' | 'all-wars' | 'all-commanders' | 'all';
-type Target =
-  | { mode: 'single'; type: SingleType; qid: string }
-  | { mode: 'bulk'; type: BulkType };
+// =============================================================================
+// SEED offline — 3 batallas famosas (sin red)
+// =============================================================================
+// Para arranque rápido / tests sin depender de Wikidata. Para poblar de verdad
+// usa `npm run ingest` (ver src/ingest.ts). Idempotente: upsert por slug.
+// =============================================================================
 
-const SINGLE_TYPES: SingleType[] = ['battle', 'war', 'commander', 'war-tree'];
-const BULK_TYPES: BulkType[] = ['all-battles', 'all-wars', 'all-commanders', 'all'];
+const AI_PREGEN_MIN_SCORE = Number(process.env.AI_AUTO_QUEUE_MIN_SCORE ?? 80);
 
-// Args:
-//   npm run seed -- battle:Q165425 war:Q193689 commander:Q517
-//   npm run seed -- all-battles
-//   npm run seed -- all                          # batallas + guerras + comandantes
-//
-// Env vars (opcionales) para modo bulk:
-//   PAGE_SIZE=500  BATCH_SIZE=50  DELAY_MS=1000  MAX_PAGES=2
-function parseArgs(argv: string[]): Target[] {
-  const args = argv.slice(2);
-  if (args.length === 0) {
-    throw new Error(
-      'Sin argumentos. Usa <tipo>:<QID> o uno de: ' + BULK_TYPES.join(', '),
-    );
-  }
-  return args.map((arg) => {
-    if ((BULK_TYPES as string[]).includes(arg)) {
-      return { mode: 'bulk', type: arg as BulkType };
-    }
-    const [type, qid] = arg.split(':');
-    if (!type || !qid) {
-      throw new Error(`Argumento inválido "${arg}".`);
-    }
-    if (!(SINGLE_TYPES as string[]).includes(type)) {
-      throw new Error(
-        `Tipo "${type}" no soportado. Válidos: ${[
-          ...SINGLE_TYPES,
-          ...BULK_TYPES,
-        ].join(', ')}`,
-      );
-    }
-    if (!/^Q\d+$/.test(qid)) {
-      throw new Error(`QID inválido "${qid}".`);
-    }
-    return { mode: 'single', type: type as SingleType, qid };
-  });
+interface BattleSeed {
+  name: string;
+  year?: number;
+  startYear?: number;
+  endYear?: number;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  latitude: number;
+  longitude: number;
+  type: 'BATTLE' | 'SIEGE' | 'CAMPAIGN';
+  importanceScore: number;
+  imageUrl?: string;
+  wikipediaUrl?: string;
+  summary?: string;
 }
 
-function bulkOptsFromEnv(): BulkOpts {
-  const num = (s: string | undefined) => (s ? Number(s) : undefined);
-  return {
-    pageSize: num(process.env.PAGE_SIZE),
-    batchSize: num(process.env.BATCH_SIZE),
-    delayMs: num(process.env.DELAY_MS),
-    maxPages: num(process.env.MAX_PAGES),
+const BATTLES: BattleSeed[] = [
+  {
+    name: 'Batalla de Lepanto',
+    year: 1571,
+    date: '1571-10-07',
+    latitude: 38.2126,
+    longitude: 21.3236,
+    type: 'BATTLE',
+    importanceScore: 88,
+    imageUrl:
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Battle_of_Lepanto_1571.jpg/500px-Battle_of_Lepanto_1571.jpg',
+    wikipediaUrl: 'https://es.wikipedia.org/wiki/Batalla_de_Lepanto',
+    summary:
+      'Combate naval librado el 7 de octubre de 1571 en el golfo de Patras, ' +
+      'en el que la flota de la Liga Santa derrotó a la armada del Imperio ' +
+      'otomano. Frenó la expansión otomana en el Mediterráneo occidental.',
+  },
+  {
+    name: 'Batalla de Stalingrado',
+    year: 1942,
+    startYear: 1942,
+    endYear: 1943,
+    startDate: '1942-08-23',
+    endDate: '1943-02-02',
+    latitude: 48.708,
+    longitude: 44.5133,
+    type: 'SIEGE',
+    importanceScore: 95,
+    imageUrl:
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/RIAN_archive_602161_Center_of_Stalingrad_after_liberation.jpg/500px-RIAN_archive_602161_Center_of_Stalingrad_after_liberation.jpg',
+    wikipediaUrl: 'https://es.wikipedia.org/wiki/Batalla_de_Stalingrado',
+    summary:
+      'Enfrentamiento entre Alemania y la Unión Soviética por la ciudad de ' +
+      'Stalingrado entre 1942 y 1943. Una de las batallas más sangrientas de ' +
+      'la historia y punto de inflexión del frente oriental.',
+  },
+  {
+    name: 'Batalla de Trafalgar',
+    year: 1805,
+    date: '1805-10-21',
+    latitude: 36.28,
+    longitude: -6.27,
+    type: 'BATTLE',
+    importanceScore: 90,
+    imageUrl:
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Trafalgar-Auguste_Mayer.jpg/500px-Trafalgar-Auguste_Mayer.jpg',
+    wikipediaUrl: 'https://es.wikipedia.org/wiki/Batalla_de_Trafalgar',
+    summary:
+      'Batalla naval del 21 de octubre de 1805 frente al cabo de Trafalgar, ' +
+      'en la que la flota británica de Nelson derrotó a la franco-española. ' +
+      'Consolidó el dominio naval británico durante más de un siglo.',
+  },
+]
+
+async function seedBattle(prisma: PrismaService, data: BattleSeed): Promise<string> {
+  const slug = toSlug(data.name);
+  const payload = {
+    name: data.name,
+    year: data.year ?? null,
+    startYear: data.startYear ?? null,
+    endYear: data.endYear ?? null,
+    date: data.date ?? null,
+    startDate: data.startDate ?? null,
+    endDate: data.endDate ?? null,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    type: data.type,
+    importanceScore: data.importanceScore,
+    imageUrl: data.imageUrl ?? null,
+    wikipediaUrl: data.wikipediaUrl ?? null,
+    summary: data.summary ?? null,
   };
+  const battle = await prisma.battle.upsert({
+    where: { slug },
+    create: { slug, ...payload },
+    update: payload,
+    select: { id: true },
+  });
+  return battle.id;
 }
 
 async function main() {
   const logger = new Logger('Seed');
-  const targets = parseArgs(process.argv);
-  const bulkOpts = bulkOptsFromEnv();
-
-  const app = await NestFactory.createApplicationContext(WikidataModule, {
+  const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['log', 'warn', 'error'],
   });
-  const service = app.get(WikidataService);
+  const prisma = app.get(PrismaService);
+  const queue = app.get(AiQueueService, { strict: false });
 
-  let ok = 0;
-  let fail = 0;
-  for (const target of targets) {
-    const label = target.mode === 'single' ? `${target.type}:${target.qid}` : target.type;
+  const highScore: string[] = [];
+  for (const data of BATTLES) {
+    const id = await seedBattle(prisma, data);
+    logger.log(`✓ ${data.name} (score ${data.importanceScore})`);
+    if (data.importanceScore > AI_PREGEN_MIN_SCORE) highScore.push(id);
+  }
+
+  for (const battleId of highScore) {
     try {
-      logger.log(`→ ${label}`);
-      if (target.mode === 'single') {
-        await runSingle(service, target.type, target.qid);
-      } else {
-        await runBulk(service, target.type, bulkOpts);
-      }
-      logger.log(`✓ ${label}`);
-      ok += 1;
+      await queue.enqueue({ battleId, reason: 'auto-ingest' });
     } catch (err) {
-      logger.error(`✗ ${label}: ${(err as Error).message}`);
-      fail += 1;
+      logger.warn(`No se pudo encolar IA para ${battleId}: ${(err as Error).message}`);
     }
   }
 
-  logger.log(`Completado. OK=${ok} FAIL=${fail}`);
+  logger.log(`Seed completado. ${BATTLES.length} batallas.`);
   await app.close();
-  if (fail > 0) process.exitCode = 1;
-}
-
-async function runSingle(
-  service: WikidataService,
-  type: SingleType,
-  qid: string,
-) {
-  switch (type) {
-    case 'battle':
-      await service.seedBattle(qid);
-      return;
-    case 'war':
-      await service.seedWar(qid);
-      return;
-    case 'commander':
-      await service.seedCommander(qid);
-      return;
-    case 'war-tree':
-      await service.seedWarWithChildren(qid);
-      return;
-  }
-}
-
-async function runBulk(
-  service: WikidataService,
-  type: BulkType,
-  opts: BulkOpts,
-) {
-  switch (type) {
-    case 'all-battles':
-      await service.bulkSyncBattles(opts);
-      return;
-    case 'all-wars':
-      await service.bulkSyncWars(opts);
-      return;
-    case 'all-commanders':
-      await service.bulkSyncCommanders(opts);
-      return;
-    case 'all':
-      await service.bulkSyncBattles(opts);
-      await service.bulkSyncWars(opts);
-      await service.bulkSyncCommanders(opts);
-      return;
-  }
 }
 
 main().catch((err) => {

@@ -1,56 +1,92 @@
 # Docker Compose
 
-El archivo `docker-compose.yml` define los servicios de infraestructura para desarrollo local.
+El stack se compone con dos ficheros:
+
+- `docker-compose.yml` — definición base de todos los servicios.
+- `docker-compose.dev.yml` — overrides de desarrollo (bind-mounts del código,
+  hot reload, puertos, comando con migraciones, servicio de docs).
+
+Para desarrollo se usan **siempre los dos juntos**:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
+
+!!! tip "Atajo con COMPOSE_FILE"
+    ```bash
+    export COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
+    docker compose up -d   # ya usa ambos ficheros
+    ```
 
 ---
 
-## Servicios definidos
+## Servicios
 
 | Servicio | Imagen | Puerto | Propósito |
 |---|---|---|---|
-| `postgres` | `postgis/postgis:16-3.4` | `5432` | Base de datos principal con extensión PostGIS |
-| `redis` | `redis:7-alpine` | `6379` | Cola de jobs (BullMQ) y caché de búsquedas |
+| `postgres` | `postgres:18.1-alpine` | 5432 | Base de datos principal |
+| `redis` | `redis:7.4-alpine` | 6379 | Colas BullMQ (IA) y caché |
+| `backend` | build `backend/` (node:24) | 3000 | API NestJS (watch + migraciones) |
+| `frontend` | build `frontend/` (node:24) | 5173 | App React (Vite) |
+| `docs` | `python:3.13-slim` | 8000 | MkDocs |
+
+Servicios bajo perfil `manual` (no arrancan por defecto): `pgadmin` (5051),
+`sonarqube` (9000) + `sonar-db`.
+
+```bash
+# Levantar un servicio manual cuando lo necesites
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile manual up -d pgadmin
+```
 
 ---
 
 ## Comandos útiles
 
 ```bash
-# Levantar todos los servicios en background
-docker compose up -d
+CF="-f docker-compose.yml -f docker-compose.dev.yml"
 
-# Levantar solo servicios manuales cuando se necesiten
-docker compose --profile manual up -d pgadmin sonarqube scraper
+# Levantar todo en background
+docker compose $CF up -d
 
 # Ver logs en tiempo real
-docker compose logs -f
+docker compose $CF logs -f backend
 
-# Parar los servicios (conserva los datos)
-docker compose stop
+# Reconstruir tras cambiar dependencias (package.json)
+docker compose $CF up -d --build backend
 
-# Eliminar los contenedores y volúmenes (borra los datos)
-docker compose down -v
+# Parar (conserva datos)
+docker compose $CF stop
 
-# Conectarse directamente a PostgreSQL
-docker compose exec postgres psql -U ares -d arescodex
+# Eliminar contenedores y volúmenes (BORRA los datos)
+docker compose $CF down -v
 
-# Conectarse a Redis CLI
-docker compose exec redis redis-cli
+# Conectarse a PostgreSQL (usuario/BD por defecto del .env)
+docker exec -it ares_codex_app_postgres psql -U ares_user -d ares_db
+
+# Conectarse a Redis
+docker exec -it ares_codex_app_redis redis-cli
+
+# Poblar la BD
+docker exec ares_codex_app_backend npm run seed
+docker exec ares_codex_app_backend npm run ingest -- battle:Q165425
 ```
 
 ---
 
 ## Persistencia de datos
 
-Los datos de PostgreSQL y Redis se persisten en volúmenes Docker nombrados, por lo que sobreviven a `docker compose stop`. Solo se borran con `docker compose down -v`.
+PostgreSQL y Redis persisten en volúmenes Docker nombrados
+(`ares_codex_app_postgres_data`, `ares_codex_app_redis_data`), por lo que
+sobreviven a `stop`. Solo se borran con `down -v`.
 
 ---
 
-## Dockerfiles de los servicios
+## Notas
 
-Cada servicio tiene su propio `Dockerfile` para producción:
-
-- `backend/Dockerfile` — Build de NestJS con multi-stage
-- `scraper/Dockerfile` — Imagen Python con Scrapy
-
-En desarrollo se usan directamente con `npm run start:dev` y `scrapy crawl`, sin construir la imagen.
+- El código se monta con bind-mount (`./backend:/app`, `./frontend:/app`), así
+  que los cambios se recargan en caliente; `node_modules` vive en un volumen
+  anónimo para no pisar el de la imagen.
+- El `backend` aplica `prisma migrate deploy` en cada arranque.
+- También existe un **devcontainer** (`backend/.devcontainer`) para abrir el
+  backend en VS Code, pero la vía recomendada para arrancar todo es el compose
+  de arriba.

@@ -18,9 +18,6 @@ export interface BattleAIInput {
   year: number | null;
   startYear: number | null;
   endYear: number | null;
-  locationHint: string | null; // país o región si lo tenemos
-  warName: string | null;
-  commanders: { name: string; side: string | null }[];
   wikipediaSummary: string | null;
 }
 

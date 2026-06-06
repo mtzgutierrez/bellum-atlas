@@ -22,7 +22,9 @@ export class AuthService {
       email: input.email,
       tier: input.tier,
     };
-    const token = this.jwt.sign(payload, { expiresIn: input.ttl ?? '30d' });
+    const token = this.jwt.sign(payload, {
+      expiresIn: (input.ttl ?? '30d') as `${number}d`,
+    });
     this.logger.log(`Token firmado (dev) para ${input.userId} tier=${input.tier}`);
     return token;
   }

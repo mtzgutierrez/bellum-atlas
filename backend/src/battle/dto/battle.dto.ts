@@ -1,21 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationMetaDto } from '../../common/pagination.dto';
 
-// ─── Refs anidadas ─────────────────────────────────────────────────────────
-
-export class BattleWarRefDto {
-  @ApiProperty() id!: string;
-  @ApiProperty() name!: string;
-  @ApiProperty() slug!: string;
-}
-
-export class BattleCommanderRefDto {
-  @ApiProperty() id!: string;
-  @ApiProperty() name!: string;
-  @ApiProperty() slug!: string;
-  @ApiPropertyOptional({ nullable: true }) side!: string | null;
-}
-
 // ─── Punto en el mapa (mínimo posible, ojo a payload size) ─────────────────
 
 /**
@@ -58,6 +43,9 @@ export class BattleDto {
   @ApiPropertyOptional({ nullable: true }) year!: number | null;
   @ApiPropertyOptional({ nullable: true }) startYear!: number | null;
   @ApiPropertyOptional({ nullable: true }) endYear!: number | null;
+  @ApiPropertyOptional({ nullable: true }) date!: string | null;
+  @ApiPropertyOptional({ nullable: true }) startDate!: string | null;
+  @ApiPropertyOptional({ nullable: true }) endDate!: string | null;
   @ApiPropertyOptional({ nullable: true }) latitude!: number | null;
   @ApiPropertyOptional({ nullable: true }) longitude!: number | null;
   @ApiPropertyOptional({ nullable: true }) imageUrl!: string | null;
@@ -66,12 +54,6 @@ export class BattleDto {
   @ApiProperty() type!: string;
   @ApiProperty() importanceScore!: number;
   @ApiProperty() hasAiStory!: boolean; // si BattleAISummary existe ya
-
-  @ApiProperty({ type: [BattleWarRefDto] })
-  wars!: BattleWarRefDto[];
-
-  @ApiProperty({ type: [BattleCommanderRefDto] })
-  commanders!: BattleCommanderRefDto[];
 }
 
 // ─── Listado paginado ──────────────────────────────────────────────────────

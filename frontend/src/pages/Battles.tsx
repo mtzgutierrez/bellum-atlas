@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import BattleCard from '../components/BattleCard'
 import Icon from '../components/Icon'
 import Pagination from '../components/Pagination'
-import { eras, yearToIsoEnd, yearToIsoStart } from '../data/eras'
+import { eras } from '../data/eras'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useDebounce } from '../hooks/useDebounce'
 import { battleService } from '../services/battle.service'
@@ -15,22 +15,14 @@ export default function Battles() {
 
   const fetcher = useCallback(() => {
     const text = debounced.trim()
-    if (text.length >= 2) {
-      return battleService.buscarPorNombre(text, { page, pageSize: 50 })
-    }
-    if (era) {
-      const found = eras.find((e) => e.key === era)
-      if (found) {
-        return battleService.buscarPorPeriodo(
-          {
-            startDate: yearToIsoStart(found.startYear),
-            endDate: yearToIsoEnd(found.endYear),
-          },
-          { page, pageSize: 50 },
-        )
-      }
-    }
-    return battleService.listar({ page, pageSize: 50 })
+    const found = era ? eras.find((e) => e.key === era) : undefined
+    return battleService.listar({
+      page,
+      pageSize: 50,
+      search: text.length >= 2 ? text : undefined,
+      yearMin: found?.startYear,
+      yearMax: found?.endYear,
+    })
   }, [debounced, era, page])
 
   const { data, loading } = useApiFetch(fetcher, [debounced, era, page])
@@ -98,4 +90,3 @@ export default function Battles() {
     </main>
   )
 }
-

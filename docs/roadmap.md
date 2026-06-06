@@ -2,22 +2,22 @@
 
 ---
 
-## Estado actual: MVP (4 semanas)
+## Estado actual
 
-| Semana | Bloque | Estado |
-|---|---|---|
-| 1 | Infraestructura + Scraper | En desarrollo |
-| 2 | API + datos completos | Pendiente |
-| 3 | Frontend core | Pendiente |
-| 4 | Pulido + Deploy | Pendiente |
+| Bloque | Estado |
+|---|---|
+| Infraestructura (Docker, Postgres, Redis) | ✓ |
+| Ingesta Wikidata + Wikipedia (imagen/resumen) | ✓ |
+| API de batallas + mapa | ✓ |
+| Narrativa por IA (Premium, BullMQ) | ✓ |
+| Frontend (Home, Catálogo, Ficha, Mapa) | ✓ |
+| Deploy en producción | Pendiente |
 
-**Criterios de salida del MVP**:
+**Próximos criterios**:
 
-- Base de datos con al menos **3.000 batallas** georreferenciadas
-- Búsqueda con resultados en menos de **500ms**
-- Mapa con todos los pins en menos de **3 segundos**
-- Responsive completo en móvil
-- Deploy en producción con dominio y HTTPS
+- Poblar la BD con un `all-battles` completo.
+- Clustering en el mapa y carga por bounding box.
+- Deploy en producción con dominio y HTTPS.
 
 ---
 
@@ -27,9 +27,9 @@
 
 | Feature | Descripción |
 |---|---|
-| **AI Insights (Claude API)** | Análisis estratégico generado por IA para cada batalla. El diferencial frente a Wikipedia. |
-| **Statistics Dashboard** | Gráficas interactivas de bajas por nación, conflictos por siglo, países más involucrados. Muy compartible en redes. |
-| **Battle Comparator** | Comparativa side-by-side de dos batallas: bajas, duración, comandantes, resultado. Útil para investigadores y divulgadores. |
+| **AI Insights (Claude API)** | ✓ Implementado: narrativa por IA (Premium) precomputada. Falta afinar prompts y activar Claude en prod. |
+| **Statistics Dashboard** | Gráficas interactivas: batallas por siglo, por tipo, mapa de densidad. Muy compartible. |
+| **Battle Comparator** | Comparativa side-by-side de dos batallas: año, tipo, importancia, narrativa. |
 
 ### Prioridad media
 

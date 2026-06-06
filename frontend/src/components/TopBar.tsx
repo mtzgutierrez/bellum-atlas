@@ -1,21 +1,38 @@
-import { NavLink, Link, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, NavLink, useLocation } from 'react-router-dom'
+import { authService, type UserTier } from '../services/auth.service'
 import Icon from './Icon'
 
 const NAV = [
   { to: '/', label: 'Inicio', exact: true },
   { to: '/map', label: 'Mapa' },
   { to: '/battles', label: 'Batallas' },
-  { to: '/wars', label: 'Guerras' },
-  { to: '/commanders', label: 'Comandantes' },
 ]
 
 export default function TopBar() {
   const location = useLocation()
+  const [tier, setTier] = useState<UserTier | null>(authService.currentTier())
+  const [busy, setBusy] = useState(false)
+
+  const switchTier = async (next: UserTier | null) => {
+    setBusy(true)
+    try {
+      if (next === null) {
+        authService.logout()
+        setTier(null)
+      } else {
+        setTier(await authService.loginDev(next))
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <header className="topbar">
       <Link to="/" className="topbar-brand">
         <span className="mark">
-          <Icon name="swords" size={14} />
+          <Icon name="sword" size={14} />
         </span>
         AresCodex
       </Link>
@@ -32,6 +49,28 @@ export default function TopBar() {
           )
         })}
       </nav>
+      <div className="topbar-auth" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          className="font-mono"
+          style={{ fontSize: 11, color: 'var(--color-text-muted)', letterSpacing: '0.08em' }}
+        >
+          {tier ? tier.toUpperCase() : 'INVITADO'}
+        </span>
+        {tier === 'premium' ? (
+          <button className="btn btn-ghost" disabled={busy} onClick={() => switchTier(null)}>
+            Salir
+          </button>
+        ) : (
+          <button
+            className="btn btn-ghost"
+            disabled={busy}
+            onClick={() => switchTier('premium')}
+            title="Emite un token Premium de demo (NODE_ENV=development)"
+          >
+            Activar Premium
+          </button>
+        )}
+      </div>
     </header>
   )
 }

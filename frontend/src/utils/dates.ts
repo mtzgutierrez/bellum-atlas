@@ -1,75 +1,79 @@
-// Formato español: DD-MM-AAAA. Años de 1-3 cifras sin ceros de relleno.
-// Añade "AC" (antes de Cristo) para años negativos y "DC" (después de Cristo)
-// para años AD anteriores al año 1000 para que sean inequívocos.
+// El backend trabaja con AÑOS (Int), no con fechas exactas. Estas utilidades
+// formatean años: negativos → "AC" (antes de Cristo), 1-999 → "DC" para que
+// sean inequívocos, ≥1000 → tal cual.
 
-interface ParsedDate {
-  year: number
-  month: number
-  day: number
-}
-
-// Parsea ISO 8601 extendido, soportando años negativos (`-0480-09-22T...`)
-// y de cualquier número de dígitos (`-12345-...`).
-function parseIso(iso: string): ParsedDate | null {
-  const m = iso.match(/^(-?\d+)-(\d{2})-(\d{2})/)
-  if (!m) return null
-  const year = Number.parseInt(m[1], 10)
-  const month = Number.parseInt(m[2], 10)
-  const day = Number.parseInt(m[3], 10)
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-    return null
-  }
-  return { year, month, day }
-}
-
-function yearSuffix(year: number): string {
-  if (year <= 0) return ' AC'
-  if (year < 1000) return ' DC'
-  return ''
-}
-
-// Año sin ceros a la izquierda; en negativo se muestra como positivo + AC.
 function yearLabel(year: number): string {
-  const abs = Math.abs(year === 0 ? 1 : year)
-  return `${abs}${yearSuffix(year)}`
+  if (year < 0) return `${Math.abs(year)} AC`
+  if (year === 0) return '1 AC'
+  if (year < 1000) return `${year} DC`
+  return String(year)
 }
 
-export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const p = parseIso(iso)
-  if (!p) return '—'
-  const dd = String(p.day).padStart(2, '0')
-  const mm = String(p.month).padStart(2, '0')
-  return `${dd}-${mm}-${yearLabel(p.year)}`
+// Un solo año. `formatYear(1571)` → "1571".
+export function formatYear(year: number | null | undefined): string {
+  if (year == null || !Number.isFinite(year)) return '—'
+  return yearLabel(year)
 }
 
-export function formatYear(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const p = parseIso(iso)
-  if (!p) return '—'
-  return yearLabel(p.year)
-}
-
-// "07-10-1571" o "01-07-1863 — 03-07-1863" según haya rango o no.
-export function formatDateRange(
-  date: string | null | undefined,
-  dateStart: string | null | undefined,
-  dateEnd: string | null | undefined,
-): string {
-  if (date) return formatDate(date)
-  if (dateStart && dateEnd) return `${formatDate(dateStart)} — ${formatDate(dateEnd)}`
-  if (dateStart) return formatDate(dateStart)
-  if (dateEnd) return formatDate(dateEnd)
-  return '—'
-}
-
+// Rango de años. Prioriza el rango [start, end]; si sólo hay un valor, lo usa.
+// `formatYearRange(1942, 1943)` → "1942 — 1943".
 export function formatYearRange(
-  start: string | null | undefined,
-  end: string | null | undefined,
+  start: number | null | undefined,
+  end: number | null | undefined,
 ): string {
-  if (!start && !end) return '—'
-  const s = start ? formatYear(start) : '?'
-  const e = end ? formatYear(end) : '?'
-  if (s === e) return s
-  return `${s} — ${e}`
+  const hasStart = start != null && Number.isFinite(start)
+  const hasEnd = end != null && Number.isFinite(end)
+  if (!hasStart && !hasEnd) return '—'
+  if (hasStart && hasEnd) {
+    return start === end ? yearLabel(start!) : `${yearLabel(start!)} — ${yearLabel(end!)}`
+  }
+  return yearLabel((hasStart ? start : end) as number)
+}
+
+// Para una batalla: usa `year` si existe, si no el rango [startYear, endYear].
+export function formatBattleYears(b: {
+  year: number | null
+  startYear: number | null
+  endYear: number | null
+}): string {
+  if (b.year != null) return formatYear(b.year)
+  return formatYearRange(b.startYear, b.endYear)
+}
+
+const MESES = [
+  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+]
+
+// "1805-10-21" → "21 oct 1805"; "-0480-09-22" → "22 sep 480 AC".
+export function formatExactDate(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const m = iso.match(/^(-?)(\d{1,})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  const bc = m[1] === '-'
+  const year = Number(m[2])
+  const month = Number(m[3])
+  const day = Number(m[4])
+  if (month < 1 || month > 12) return null
+  return `${day} ${MESES[month - 1]} ${year}${bc ? ' AC' : ''}`
+}
+
+// Fechas de una batalla con el mayor detalle disponible:
+//   día exacto de inicio/fin > un solo día > rango de años > año.
+export function formatBattleDates(b: {
+  year: number | null
+  startYear: number | null
+  endYear: number | null
+  date: string | null
+  startDate: string | null
+  endDate: string | null
+}): string {
+  const start = formatExactDate(b.startDate)
+  const end = formatExactDate(b.endDate)
+  if (start && end) return `${start} — ${end}`
+  const single = formatExactDate(b.date)
+  if (single) return single
+  if (start) return start
+  if (end) return end
+  return formatBattleYears(b)
 }

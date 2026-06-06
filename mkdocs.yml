@@ -71,6 +71,8 @@ nav:
       - Visión general: backend/index.md
       - Módulos NestJS: backend/modulos.md
       - API Reference: backend/api.md
+      - Ingesta (Wikidata): backend/ingesta.md
+      - IA (LLM): backend/ia.md
   - Frontend:
       - Visión general: frontend/index.md
       - Páginas: frontend/paginas.md

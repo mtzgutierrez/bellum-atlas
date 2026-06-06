@@ -10,10 +10,11 @@ async function bootstrap() {
     .setTitle('AresCodex API')
     .setDescription(
       'Atlas histórico interactivo de conflictos militares.\n\n' +
-        'Los endpoints de `/internal/scraper/*` requieren el header `x-api-key`.',
+        'El endpoint Premium `GET /battles/:id/ai-story` requiere un JWT ' +
+        '(Bearer) con tier `premium`. Consíguelo en `POST /auth/dev-token`.',
     )
     .setVersion('1.0')
-    .addApiKey({ type: 'apiKey', in: 'header', name: 'x-api-key' }, 'x-api-key')
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

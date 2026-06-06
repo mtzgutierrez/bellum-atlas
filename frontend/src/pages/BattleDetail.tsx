@@ -1,16 +1,17 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import BattleCard from '../components/BattleCard'
+import BattleMiniMap from '../components/BattleMiniMap'
 import Icon from '../components/Icon'
 import SmartImage, { TYPE_LABEL } from '../components/SmartImage'
 import TypeIcon from '../components/TypeIcon'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { aiService } from '../services/ai.service'
+import type { AIStoryState } from '../services/ai.types'
+import { authService } from '../services/auth.service'
 import { battleService } from '../services/battle.service'
-import type {
-  BattleDetail,
-  BattleFaction,
-  BattleType,
-} from '../services/battle.types'
-import { formatDateRange } from '../utils/dates'
+import type { BattleDetail } from '../services/battle.types'
+import { formatBattleDates } from '../utils/dates'
 
 export default function BattleDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -23,11 +24,7 @@ export default function BattleDetailPage() {
       <main className="detail">
         <div className="skeleton" style={{ height: 32, width: '40%', marginBottom: 24 }} />
         <div className="skeleton" style={{ height: 64, width: '70%', marginBottom: 48 }} />
-        <div className="skeleton" style={{ height: 240, marginBottom: 48 }} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-          <div className="skeleton" style={{ height: 240 }} />
-          <div className="skeleton" style={{ height: 240 }} />
-        </div>
+        <div className="skeleton" style={{ height: 320, marginBottom: 24 }} />
       </main>
     )
   }
@@ -51,75 +48,54 @@ export default function BattleDetailPage() {
 }
 
 function Detail({ battle }: { battle: BattleDetail }) {
-  const type = battle.type as BattleType | null
-  const typeLabel = type ? TYPE_LABEL[type] : '—'
-  const war = battle.wars[0]
-  const { side1, side2 } = groupBySide(battle.factions)
+  const typeLabel = TYPE_LABEL[battle.type] ?? '—'
+  const hasCoords = battle.latitude != null && battle.longitude != null
 
   return (
     <main className="detail">
       <div className="detail-breadcrumb">
         <Link to="/battles">Catálogo</Link>
         <Icon name="chevron-right" size={12} />
-        {war && (
-          <>
-            <Link to={`/wars/${war.slug}`}>{war.name}</Link>
-            <Icon name="chevron-right" size={12} />
-          </>
-        )}
         <span style={{ color: 'var(--color-text-primary)' }}>{battle.name}</span>
       </div>
 
       <header className="detail-header">
         <div className="detail-eyebrow">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <TypeIcon type={type} size={12} /> {typeLabel}
+            <TypeIcon type={battle.type} size={12} /> {typeLabel}
           </span>
         </div>
         <h1 className="detail-title">{battle.name}</h1>
         <div className="detail-meta-row">
           <span className="item">
             <Icon name="calendar" />
-            <span className="font-mono">
-              {formatDateRange(battle.date, battle.dateStart, battle.dateEnd)}
-            </span>
+            <span className="font-mono">{formatBattleDates(battle)}</span>
           </span>
-          {(battle.locationName || battle.country) && (
-            <span className="item">
-              <Icon name="map-pin" />
-              <span>{[battle.locationName, battle.country].filter(Boolean).join(', ')}</span>
-              {battle.latitude != null && battle.longitude != null && (
-                <span
-                  className="font-mono"
-                  style={{ color: 'var(--color-text-muted)', marginLeft: 6 }}
-                >
-                  ({battle.latitude.toFixed(2)}, {battle.longitude.toFixed(2)})
+          {hasCoords && (
+            <>
+              <span className="item">
+                <Icon name="map-pin" />
+                <span className="font-mono" style={{ color: 'var(--color-text-muted)' }}>
+                  {battle.latitude!.toFixed(2)}, {battle.longitude!.toFixed(2)}
                 </span>
-              )}
-            </span>
-          )}
-          {battle.latitude != null && battle.longitude != null && (
-            <Link to={`/map?focus=${battle.slug}`} className="item btn-link">
-              <Icon name="map" size={14} />
-              <span>Ver en el mapa</span>
-            </Link>
-          )}
-          {war && (
-            <span className="item">
-              <Icon name="flag" />
-              <Link
-                to={`/wars/${war.slug}`}
-                style={{
-                  color: 'var(--color-text-primary)',
-                  borderBottom: '1px solid var(--color-border)',
-                }}
-              >
-                {war.name}
+              </span>
+              <Link to={`/map?focus=${battle.slug}`} className="item btn-link">
+                <Icon name="map" size={14} />
+                <span>Ver en el mapa</span>
               </Link>
-            </span>
+            </>
           )}
         </div>
       </header>
+
+      <div className="detail-hero-media">
+        <SmartImage
+          src={battle.imageUrl}
+          alt={battle.name}
+          type={battle.type}
+          label={typeLabel}
+        />
+      </div>
 
       {battle.summary && (
         <section className="detail-outcome">
@@ -132,26 +108,20 @@ function Detail({ battle }: { battle: BattleDetail }) {
         </section>
       )}
 
-      <div className="detail-hero-media">
-        <SmartImage
-          src={battle.imageUrl}
-          alt={battle.name}
-          type={type}
-          label={typeLabel}
-        />
-      </div>
-
-      <StatsRow battle={battle} />
-
-      {(side1.length > 0 || side2.length > 0) && (
+      {hasCoords && (
         <section className="detail-section">
-          <h2 className="detail-section-title">Bandos enfrentados</h2>
-          <div className="factions-grid">
-            <SideColumn side={1} factions={side1} />
-            <SideColumn side={2} factions={side2} />
-          </div>
+          <h2 className="detail-section-title">Ubicación</h2>
+          <BattleMiniMap
+            latitude={battle.latitude!}
+            longitude={battle.longitude!}
+            name={battle.name}
+          />
         </section>
       )}
+
+      <AiStorySection slug={battle.slug} />
+
+      <RelatedBattles battle={battle} />
 
       {battle.wikipediaUrl && (
         <section className="detail-section">
@@ -161,7 +131,7 @@ function Detail({ battle }: { battle: BattleDetail }) {
             rel="noopener noreferrer"
             className="btn-link"
           >
-            Ver en Wikipedia <Icon name="external" size={12} />
+            Leer el artículo completo en Wikipedia <Icon name="external" size={12} />
           </a>
         </section>
       )}
@@ -169,226 +139,203 @@ function Detail({ battle }: { battle: BattleDetail }) {
   )
 }
 
-function StatsRow({ battle }: { battle: BattleDetail }) {
-  const items: Array<[string, string]> = [
-    ['País', battle.country ?? '—'],
-    [
-      'Muertos',
-      battle.deaths != null ? battle.deaths.toLocaleString('es-ES') : '—',
-    ],
-    [
-      'Bajas',
-      battle.casualties != null ? battle.casualties.toLocaleString('es-ES') : '—',
-    ],
-    [
-      'Coordenadas',
-      battle.latitude != null && battle.longitude != null
-        ? `${battle.latitude.toFixed(2)}, ${battle.longitude.toFixed(2)}`
-        : '—',
-    ],
-  ]
+// ── Batallas de la misma época ───────────────────────────────────────────────
+// Sustituye a la relación por guerra: batallas en una ventana de ±20 años.
+
+function RelatedBattles({ battle }: { battle: BattleDetail }) {
+  const ref = battle.year ?? battle.startYear
+  const fetcher = useCallback(() => {
+    if (ref == null) return Promise.resolve(null)
+    return battleService.listar({ yearMin: ref - 20, yearMax: ref + 20, pageSize: 7 })
+  }, [ref])
+  const { data } = useApiFetch(fetcher, [ref])
+
+  const items = (data?.data ?? []).filter((b) => b.slug !== battle.slug).slice(0, 6)
+  if (ref == null || items.length === 0) return null
+
   return (
-    <section
-      className="detail-section"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-        border: '1px solid var(--color-border)',
-        background: 'var(--color-surface)',
-      }}
-    >
-      {items.map(([l, v], i) => (
-        <div
-          key={l}
-          style={{
-            padding: 24,
-            borderRight:
-              i < items.length - 1 ? '1px solid var(--color-border)' : 'none',
-          }}
-        >
-          <div
-            className="font-mono"
-            style={{
-              fontSize: 11,
-              color: 'var(--color-text-muted)',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              marginBottom: 6,
-            }}
-          >
-            {l}
-          </div>
-          <div className="font-display" style={{ fontSize: 22, fontWeight: 700 }}>
-            {v}
-          </div>
-        </div>
-      ))}
+    <section className="detail-section">
+      <h2 className="detail-section-title">Batallas de la misma época</h2>
+      <div className="catalog-grid">
+        {items.map((b) => (
+          <BattleCard key={b.id} battle={b} />
+        ))}
+      </div>
     </section>
   )
 }
 
-// Agrupa todas las facciones del mismo bando en una columna estilo Wikipedia:
-// los nombres se listan en bloque, y debajo se suman los comandantes y las
-// fuerzas/bajas por facción.
-function SideColumn({
-  side,
-  factions,
-}: {
-  side: number
-  factions: BattleFaction[]
-}) {
-  if (factions.length === 0) {
-    return (
-      <div className="faction-col">
-        <div className="faction-side">Bando {side}</div>
-        <p className="faction-belligerents" style={{ color: 'var(--color-text-muted)' }}>
-          —
-        </p>
-      </div>
-    )
+// ── Narrativa de IA (Premium) ────────────────────────────────────────────────
+
+const AI_TABS = [
+  { key: 'summary', label: 'Story Mode' },
+  { key: 'context', label: 'Contexto estratégico' },
+  { key: 'outcome', label: 'Resultado' },
+  { key: 'curiosities', label: 'Curiosidades' },
+] as const
+
+type AiTabKey = (typeof AI_TABS)[number]['key']
+
+function AiStorySection({ slug }: { slug: string }) {
+  const [state, setState] = useState<AIStoryState | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [tab, setTab] = useState<AiTabKey>('summary')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      setState(await aiService.historia(slug))
+    } catch {
+      setState(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [slug])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const becomePremium = async () => {
+    await authService.loginDev('premium')
+    await load()
   }
-  const allCommanders = factions.flatMap((f) => f.commanders)
-  const totalStrength = firstNonNull(factions.map((f) => f.strength))
-  const totalDeaths = firstNonNull(factions.map((f) => f.deaths))
-  const totalInjured = firstNonNull(factions.map((f) => f.injured))
+
   return (
-    <div className="faction-col">
-      <div className="faction-side">Bando {side}</div>
-      <ul
-        className="faction-belligerents"
-        style={{ listStyle: 'none', padding: 0, margin: 0 }}
-      >
-        {factions.map((f) => (
-          <li
-            key={f.id}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}
+    <section className="detail-section">
+      <h2 className="detail-section-title">
+        Narrativa por IA{' '}
+        <span
+          className="font-mono"
+          style={{
+            fontSize: 11,
+            color: 'var(--color-gold, #b8860b)',
+            letterSpacing: '0.1em',
+            marginLeft: 8,
+          }}
+        >
+          PREMIUM
+        </span>
+      </h2>
+
+      {loading && !state && <div className="skeleton" style={{ height: 160 }} />}
+
+      {(state?.kind === 'unauthorized' || state?.kind === 'forbidden') && (
+        <PremiumTeaser onUnlock={becomePremium} />
+      )}
+
+      {state?.kind === 'pending' && (
+        <div
+          style={{
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-surface)',
+            padding: 24,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            alignItems: 'flex-start',
+          }}
+        >
+          <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
+            Narrativa generándose en segundo plano… Se precomputa con un worker y
+            se cachea de forma permanente. Vuelve en unos segundos.
+            {state.queuePosition != null ? ` (en cola: ${state.queuePosition})` : ''}
+          </p>
+          <button className="btn btn-primary" onClick={load}>
+            Actualizar
+          </button>
+        </div>
+      )}
+
+      {state?.kind === 'ready' && (
+        <div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            {AI_TABS.map((t) => (
+              <button
+                key={t.key}
+                className="btn btn-ghost"
+                style={
+                  tab === t.key
+                    ? {
+                        background: 'var(--color-gold, #b8860b)',
+                        color: 'var(--color-bg, #0d0d0d)',
+                        borderColor: 'var(--color-gold, #b8860b)',
+                      }
+                    : undefined
+                }
+                onClick={() => setTab(t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="detail-outcome-body">
+            {state.story[tab].split(/\n+/).map((p, i) => (
+              <p key={i}>{p}</p>
+            ))}
+          </div>
+          <div
+            className="font-mono"
+            style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 12 }}
           >
-            {f.flagUrl && (
-              <img
-                src={f.flagUrl}
-                alt=""
-                style={{
-                  width: 22,
-                  height: 14,
-                  objectFit: 'cover',
-                  border: '1px solid var(--color-border)',
-                }}
-              />
-            )}
-            <span>{f.name}</span>
+            Generado por {state.story.modelUsed} ·{' '}
+            {new Date(state.story.generatedAt).toLocaleString('es-ES')}
+          </div>
+        </div>
+      )}
+
+      {!loading && !state && (
+        <button className="btn btn-ghost" onClick={load}>
+          Reintentar
+        </button>
+      )}
+    </section>
+  )
+}
+
+// Teaser atractivo para invitados / free: enumera lo que desbloquea.
+function PremiumTeaser({ onUnlock }: { onUnlock: () => void }) {
+  return (
+    <div
+      style={{
+        border: '1px solid var(--color-gold, #b8860b)',
+        background:
+          'linear-gradient(135deg, color-mix(in srgb, var(--color-gold, #b8860b) 8%, transparent), var(--color-surface))',
+        padding: 28,
+      }}
+    >
+      <p style={{ marginTop: 0, color: 'var(--color-text-primary)', fontSize: 16 }}>
+        Desbloquea la <strong>narrativa generada por IA</strong> de esta batalla:
+      </p>
+      <ul
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '8px 24px',
+          listStyle: 'none',
+          padding: 0,
+          margin: '0 0 20px',
+        }}
+      >
+        {[
+          ['Story Mode', 'El relato de la batalla, contado como una historia.'],
+          ['Contexto estratégico', 'Por qué ocurrió y qué estaba en juego.'],
+          ['Resultado', 'Consecuencias y cómo cambió el rumbo.'],
+          ['Curiosidades', 'Anécdotas y datos que no esperas.'],
+        ].map(([t, d]) => (
+          <li key={t} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <Icon name="star" size={14} color="var(--color-gold, #b8860b)" />
+            <span>
+              <strong>{t}</strong>
+              <br />
+              <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{d}</span>
+            </span>
           </li>
         ))}
       </ul>
-      <div className="faction-divider" />
-      <div className="faction-data">
-        <span className="label">Comandantes</span>
-      </div>
-      {allCommanders.length === 0 ? (
-        <p
-          style={{
-            color: 'var(--color-text-muted)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-          }}
-        >
-          Sin nombres documentados.
-        </p>
-      ) : (
-        <ul className="faction-list">
-          {allCommanders.map((c) => (
-            <li key={`${c.id}`}>
-              <Link
-                to={`/commanders/${c.slug}`}
-                style={{
-                  color: 'inherit',
-                  borderBottom: '1px solid transparent',
-                  transition: 'border-color 150ms ease',
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.borderBottomColor = 'var(--color-border)')
-                }
-                onMouseLeave={(e) => (e.currentTarget.style.borderBottomColor = 'transparent')}
-              >
-                {c.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      <SideTotals
-        strength={totalStrength}
-        deaths={totalDeaths}
-        injured={totalInjured}
-      />
+      <button className="btn btn-primary" onClick={onUnlock}>
+        Activar Premium (demo)
+      </button>
     </div>
   )
-}
-
-// Cifras totales del bando, en texto bruto del infobox de Wikipedia.
-// El encabezado deja claro que es el agregado del bando.
-function SideTotals({
-  strength,
-  deaths,
-  injured,
-}: {
-  strength: string | null
-  deaths: string | null
-  injured: string | null
-}) {
-  if (strength == null && deaths == null && injured == null) return null
-  return (
-    <>
-      <div className="faction-divider" />
-      <div
-        className="font-mono"
-        style={{
-          fontSize: 10,
-          color: 'var(--color-text-muted)',
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          marginBottom: 6,
-        }}
-      >
-        Totales del bando
-      </div>
-      <SideTotalRow label="Fuerzas" value={strength} />
-      <SideTotalRow label="Muertos" value={deaths} />
-      <SideTotalRow label="Heridos" value={injured} />
-    </>
-  )
-}
-
-function SideTotalRow({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div
-      className="faction-data"
-      style={{ alignItems: 'flex-start', gap: 12 }}
-    >
-      <span className="label">{label}</span>
-      <span
-        className="value"
-        style={{ whiteSpace: 'pre-line', textAlign: 'right' }}
-      >
-        {value ?? 'Cifra no documentada'}
-      </span>
-    </div>
-  )
-}
-
-function groupBySide(factions: BattleFaction[]): {
-  side1: BattleFaction[]
-  side2: BattleFaction[]
-} {
-  const side1: BattleFaction[] = []
-  const side2: BattleFaction[] = []
-  for (const f of factions) {
-    if (f.side === 1) side1.push(f)
-    else if (f.side === 2) side2.push(f)
-  }
-  return { side1, side2 }
-}
-
-function firstNonNull(values: (string | null)[]): string | null {
-  for (const v of values) if (v != null && v.length > 0) return v
-  return null
 }

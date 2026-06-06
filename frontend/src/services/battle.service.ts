@@ -1,44 +1,38 @@
-import { get, post, qs, type Paginated, type PaginationQuery } from './api'
+import { get, qs, type Paginated } from './api'
 import type {
   BattleDetail,
+  BattlePoint,
+  BattleQuery,
   BattleSummary,
-  CoordinatesQuery,
-  TimePeriodQuery,
 } from './battle.types'
 
+// Traduce el objeto de filtros del frontend a query params del backend.
+function buildQuery(q?: BattleQuery): string {
+  if (!q) return ''
+  return qs({
+    page: q.page,
+    pageSize: q.pageSize,
+    search: q.search,
+    yearMin: q.yearMin,
+    yearMax: q.yearMax,
+    minImportance: q.minImportance,
+    bboxN: q.bboxN,
+    bboxS: q.bboxS,
+    bboxE: q.bboxE,
+    bboxW: q.bboxW,
+  })
+}
+
 export const battleService = {
-  listar: (p?: PaginationQuery) =>
-    get<Paginated<BattleSummary>>('/battle' + qs({ ...p })),
+  // Listado paginado (sidebar / catálogo). Acepta búsqueda y rango de años.
+  listar: (q?: BattleQuery) =>
+    get<Paginated<BattleSummary>>('/battles' + buildQuery(q)),
 
-  buscarPorNombre: (nombre: string, p?: PaginationQuery) =>
-    get<Paginated<BattleSummary>>(
-      `/battle/search/${encodeURIComponent(nombre)}` + qs({ ...p }),
-    ),
+  // Puntos ligeros para pintar el mapa (sin paginar; el backend capa a 10k).
+  puntos: (q?: BattleQuery) =>
+    get<BattlePoint[]>('/battles/points' + buildQuery(q)),
 
-  buscarPorPeriodo: (query: TimePeriodQuery, p?: PaginationQuery) =>
-    post<Paginated<BattleSummary>>(
-      '/battle/time-period' + qs({ ...p }),
-      query,
-    ),
-
-  buscarPorCoordenadas: (query: CoordinatesQuery, p?: PaginationQuery) =>
-    post<Paginated<BattleSummary>>(
-      '/battle/coordinates' + qs({ ...p }),
-      query,
-    ),
-
-  buscarPorGuerra: (warId: string, p?: PaginationQuery) =>
-    get<Paginated<BattleSummary>>(
-      `/battle/war/${encodeURIComponent(warId)}` + qs({ ...p }),
-    ),
-
-  buscarPorComandante: (commanderId: string, p?: PaginationQuery) =>
-    get<Paginated<BattleSummary>>(
-      `/battle/commander/${encodeURIComponent(commanderId)}` + qs({ ...p }),
-    ),
-
-  batallaDelDia: () => get<BattleDetail>('/battle/random'),
-
+  // Detalle por id o slug.
   detalle: (idOrSlug: string) =>
-    get<BattleDetail>(`/battle/${encodeURIComponent(idOrSlug)}`),
+    get<BattleDetail>(`/battles/${encodeURIComponent(idOrSlug)}`),
 }

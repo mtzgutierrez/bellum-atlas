@@ -52,19 +52,14 @@ export class LlmService implements OnModuleInit {
   // Plantilla útil para desarrollar UI sin depender de la API.
   private mock(input: BattleAIInput): AIStory {
     const when = input.year ?? input.startYear ?? '?';
-    const commanders =
-      input.commanders.length > 0
-        ? input.commanders.map((c) => c.name).join(', ')
-        : 'comandantes no documentados';
     const baseSummary = input.wikipediaSummary?.slice(0, 280) ?? '';
     return {
       summary:
         `${input.name} (${when}) — relato breve generado en modo demo. ` +
-        `Participantes principales: ${commanders}. ` +
         (baseSummary ? `Contexto base: ${baseSummary}` : ''),
       context:
-        `Contexto estratégico (demo). La batalla se enmarca en ` +
-        `${input.warName ?? 'un conflicto histórico'} y tuvo lugar hacia ${when}.`,
+        `Contexto estratégico (demo). La batalla tuvo lugar hacia ${when} y ` +
+        `marcó su época.`,
       outcome:
         `Resultado (demo). Cambió la dinámica del frente y reconfiguró las ` +
         `fuerzas implicadas. Genera tu propia narrativa activando AI_PROVIDER=anthropic.`,
@@ -115,13 +110,6 @@ function buildUserPrompt(i: BattleAIInput): string {
     i.year != null ? `Año: ${i.year}` : null,
     i.startYear != null && i.endYear != null
       ? `Rango: ${i.startYear}-${i.endYear}`
-      : null,
-    i.locationHint ? `Lugar: ${i.locationHint}` : null,
-    i.warName ? `Guerra: ${i.warName}` : null,
-    i.commanders.length > 0
-      ? `Comandantes: ${i.commanders
-          .map((c) => (c.side ? `${c.name} (${c.side})` : c.name))
-          .join(', ')}`
       : null,
     i.wikipediaSummary
       ? `\nResumen de Wikipedia (referencia, puede tener errores):\n${i.wikipediaSummary}`

@@ -13,6 +13,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { PremiumGuard } from '../auth/premium.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -24,6 +25,10 @@ import { AiQueueService } from './ai-queue.service';
 @ApiTags('IA')
 @Controller('battles/:id/ai-story')
 @UseGuards(PremiumGuard)
+// Premium tier con rate limit controlado (regla 4.3): 30 peticiones/min por
+// IP. Mucho más estricto que el global. El coste real de IA está acotado
+// aparte por el caché permanente (no se regenera lo ya generado).
+@Throttle({ default: { limit: 30, ttl: 60_000 } })
 export class AiController {
   constructor(
     private readonly prisma: PrismaService,

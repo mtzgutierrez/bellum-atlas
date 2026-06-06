@@ -1,4 +1,10 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  Query,
+} from '@nestjs/common';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -9,11 +15,9 @@ import { normalizePagination } from '../common/pagination.dto';
 import { BattleFilters, BattleWithRelations } from './battle.repository';
 import { BattleService } from './battle.service';
 import {
-  BattleCommanderRefDto,
   BattleDto,
   BattlePointDto,
   BattleSummaryDto,
-  BattleWarRefDto,
   BattlesQueryDto,
   PaginatedBattlesDto,
 } from './dto/battle.dto';
@@ -84,11 +88,28 @@ export class BattleController {
   }
 }
 
+// Máximo lapso de años permitido en una consulta. Limita la carga: sin esto,
+// un rango amplio (o sin filtrar) podría devolver miles de batallas y ralentizar
+// el mapa. El frontend nunca pide más de esto; aquí lo validamos por si acaso.
+const MAX_YEAR_SPAN = 150;
+
 function parseFilters(q: BattlesQueryDto): BattleFilters {
   const num = (s: string | undefined) => (s !== undefined ? Number(s) : undefined);
   const yearMin = num(q.yearMin);
   const yearMax = num(q.yearMax);
   const minImportance = num(q.minImportance);
+
+  if (
+    Number.isFinite(yearMin) &&
+    Number.isFinite(yearMax) &&
+    (yearMax as number) - (yearMin as number) > MAX_YEAR_SPAN
+  ) {
+    throw new BadRequestException(
+      `El rango de años no puede superar ${MAX_YEAR_SPAN} años (recibido: ${
+        (yearMax as number) - (yearMin as number)
+      }).`,
+    );
+  }
   const n = num(q.bboxN);
   const s = num(q.bboxS);
   const e = num(q.bboxE);
@@ -114,6 +135,9 @@ function toDto(b: BattleWithRelations): BattleDto {
     year: b.year,
     startYear: b.startYear,
     endYear: b.endYear,
+    date: b.date,
+    startDate: b.startDate,
+    endDate: b.endDate,
     latitude: b.latitude,
     longitude: b.longitude,
     imageUrl: b.imageUrl,
@@ -122,20 +146,5 @@ function toDto(b: BattleWithRelations): BattleDto {
     type: b.type,
     importanceScore: b.importanceScore,
     hasAiStory: b.aiSummary != null,
-    wars: b.wars.map(
-      (bw): BattleWarRefDto => ({
-        id: bw.war.id,
-        name: bw.war.name,
-        slug: bw.war.slug,
-      }),
-    ),
-    commanders: b.commanders.map(
-      (bc): BattleCommanderRefDto => ({
-        id: bc.commander.id,
-        name: bc.commander.name,
-        slug: bc.commander.slug,
-        side: bc.side,
-      }),
-    ),
   };
 }

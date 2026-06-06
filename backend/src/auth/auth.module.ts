@@ -14,7 +14,12 @@ import { PremiumGuard } from './premium.guard';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET') ?? 'dev-insecure-change-me',
-        signOptions: { expiresIn: config.get<string>('JWT_EXPIRATION') ?? '7d' },
+        // expiresIn acepta string tipo "7d"; el tipado de jsonwebtoken lo
+        // modela como union estrecha (ms.StringValue|number), de ahí el cast.
+        signOptions: {
+          expiresIn: (config.get<string>('JWT_EXPIRATION') ??
+            '7d') as `${number}d`,
+        },
       }),
     }),
   ],
