@@ -83,3 +83,23 @@ export interface BattleDetail {
   importanceScore: number
   hasAiStory: boolean
 }
+
+// GET /battles/:id/article — extracto completo de Wikipedia (cacheado en BD).
+export interface BattleArticle {
+  article: string | null
+  sourceUrl: string | null
+  cached: boolean
+}
+
+// GET /battles/stats — agregados del catálogo para la página de estadísticas.
+export interface BattleStats {
+  total: number
+  byType: { type: BattleType; count: number }[]
+  withImage: number
+  withCoords: number
+  withAi: number
+  byCentury: CenturyFacet[]
+  yearMin: number | null
+  yearMax: number | null
+  topImportant: BattleSummary[]
+}

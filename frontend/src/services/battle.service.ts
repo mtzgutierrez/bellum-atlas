@@ -1,8 +1,10 @@
 import { get, qs, type Paginated } from './api'
 import type {
+  BattleArticle,
   BattleDetail,
   BattlePoint,
   BattleQuery,
+  BattleStats,
   BattleSummary,
   CenturyFacet,
 } from './battle.types'
@@ -48,4 +50,11 @@ export const battleService = {
   // Detalle por id o slug.
   detalle: (idOrSlug: string) =>
     get<BattleDetail>(`/battles/${encodeURIComponent(idOrSlug)}`),
+
+  // Extracto completo de Wikipedia (se cachea en BD al primer acceso).
+  articulo: (idOrSlug: string) =>
+    get<BattleArticle>(`/battles/${encodeURIComponent(idOrSlug)}/article`),
+
+  // Agregados del catálogo para la página de estadísticas.
+  estadisticas: () => get<BattleStats>('/battles/stats'),
 }

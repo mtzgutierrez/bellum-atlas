@@ -90,6 +90,13 @@ export class BattleController {
     return this.service.centuries();
   }
 
+  // ─── /battles/stats: agregados para la página de estadísticas ──────────
+  @Get('stats')
+  @ApiOperation({ summary: 'Recuentos y agregados del catálogo de batallas.' })
+  async stats() {
+    return this.service.stats();
+  }
+
   // ─── /battles: listado paginado para la sidebar ────────────────────────
   @Get()
   @ApiOperation({ summary: 'Listado paginado de batallas con filtros.' })
@@ -102,6 +109,16 @@ export class BattleController {
       data: result.data.map(toSummary),
       meta: result.meta,
     };
+  }
+
+  // ─── /battles/:id/article: extracto de Wikipedia (backfill perezoso) ───
+  @Get(':id/article')
+  @ApiOperation({
+    summary: 'Extracto completo de Wikipedia de la batalla (cacheado en BD).',
+  })
+  @ApiNotFoundResponse({ description: 'Batalla no encontrada' })
+  async article(@Param('id') id: string) {
+    return this.service.getArticle(id);
   }
 
   // ─── /battles/:id: detalle (sin payload de IA) ─────────────────────────
@@ -125,7 +142,20 @@ function parseFilters(q: BattlesQueryDto): BattleFilters {
   const yearMax = num(q.yearMax);
   const minImportance = num(q.minImportance);
 
+  const n = num(q.bboxN);
+  const s = num(q.bboxS);
+  const e = num(q.bboxE);
+  const w = num(q.bboxW);
+  const bbox =
+    [n, s, e, w].every((v) => v != null && Number.isFinite(v as number))
+      ? { north: n!, south: s!, east: e!, west: w! }
+      : undefined;
+
+  // El tope de 150 años acota el nº de resultados. Si se filtra por área
+  // (bbox), la propia zona los limita: permitimos cualquier rango temporal
+  // (búsqueda "en esta zona, todas las épocas").
   if (
+    !bbox &&
     Number.isFinite(yearMin) &&
     Number.isFinite(yearMax) &&
     (yearMax as number) - (yearMin as number) > MAX_YEAR_SPAN
@@ -136,14 +166,6 @@ function parseFilters(q: BattlesQueryDto): BattleFilters {
       }).`,
     );
   }
-  const n = num(q.bboxN);
-  const s = num(q.bboxS);
-  const e = num(q.bboxE);
-  const w = num(q.bboxW);
-  const bbox =
-    [n, s, e, w].every((v) => v != null && Number.isFinite(v as number))
-      ? { north: n!, south: s!, east: e!, west: w! }
-      : undefined;
   const type =
     q.type === 'BATTLE' || q.type === 'SIEGE' || q.type === 'CAMPAIGN'
       ? q.type

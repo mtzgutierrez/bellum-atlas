@@ -100,34 +100,58 @@ function Detail({ battle }: { battle: BattleDetail }) {
         </div>
       </header>
 
-      <div className="detail-hero-media">
-        <SmartImage
-          src={battle.imageUrl}
-          alt={battle.name}
-          type={battle.type}
-          label={typeLabel}
-        />
-      </div>
-
-      {battle.summary && (
-        <section className="detail-outcome">
-          <div className="detail-outcome-eyebrow">Síntesis</div>
-          <div className="detail-outcome-body">
-            {battle.summary.split(/\n+/).map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
+      {battle.summary ? (
+        <div className="detail-intro">
+          <div className="detail-intro-media">
+            <SmartImage
+              src={battle.imageUrl}
+              alt={battle.name}
+              type={battle.type}
+              label={typeLabel}
+            />
           </div>
-        </section>
+          <section className="detail-intro-synthesis">
+            <div className="detail-outcome-eyebrow">Síntesis</div>
+            <div className="detail-outcome-body">
+              {battle.summary.split(/\n+/).map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : (
+        <div className="detail-hero-media">
+          <SmartImage
+            src={battle.imageUrl}
+            alt={battle.name}
+            type={battle.type}
+            label={typeLabel}
+          />
+        </div>
       )}
+
+      <BattleArticleSection slug={battle.slug} summary={battle.summary} />
 
       {hasCoords && (
         <section className="detail-section">
           <h2 className="detail-section-title">Ubicación</h2>
-          <BattleMiniMap
-            latitude={battle.latitude!}
-            longitude={battle.longitude!}
-            name={battle.name}
-          />
+          <Link
+            to={`/map?focus=${battle.slug}`}
+            className="detail-map-link"
+            aria-label={`Ver ${battle.name} en el mapa`}
+          >
+            <BattleMiniMap
+              latitude={battle.latitude!}
+              longitude={battle.longitude!}
+              name={battle.name}
+            />
+            {/* Capa transparente: garantiza que el clic en el mapa navegue
+                (Leaflet captura sus propios eventos). */}
+            <span className="detail-map-overlay" aria-hidden="true" />
+            <span className="detail-map-cta">
+              <Icon name="map" size={14} /> Ver en el mapa
+            </span>
+          </Link>
         </section>
       )}
 
@@ -184,9 +208,125 @@ function RelatedBattles({ battle }: { battle: BattleDetail }) {
   );
 }
 
+// ── Contexto histórico (Wikipedia) ────────────────────────────────────────
+// Extracto completo del artículo de Wikipedia, cacheado en BD al abrir la
+// ficha. Da contenido rico a TODAS las batallas sin depender de la IA.
+
+function BattleArticleSection({
+  slug,
+  summary,
+}: {
+  slug: string;
+  summary: string | null;
+}) {
+  const fetcher = useCallback(() => battleService.articulo(slug), [slug]);
+  const { data, loading } = useApiFetch(fetcher, [slug]);
+  const [expanded, setExpanded] = useState(false);
+
+  if (loading) {
+    return (
+      <section className="detail-section">
+        <h2 className="detail-section-title">Contexto histórico</h2>
+        <div className="skeleton" style={{ height: 180 }} />
+      </section>
+    );
+  }
+
+  const text = data?.article?.trim();
+  if (!text) return null;
+
+  // La síntesis es el inicio del artículo de Wikipedia: recortamos esos
+  // párrafos iniciales para no repetirla aquí.
+  const blocks = parseArticleBlocks(stripSummaryOverlap(text, summary));
+  if (blocks.length === 0) return null;
+
+  const PREVIEW = 5;
+  const shown = expanded ? blocks : blocks.slice(0, PREVIEW);
+  const hasMore = blocks.length > PREVIEW;
+
+  return (
+    <section className="detail-section">
+      <h2 className="detail-section-title">Contexto histórico</h2>
+      <div
+        className={`detail-article ${!expanded && hasMore ? "is-collapsed" : ""}`}
+      >
+        {shown.map((b, i) =>
+          b.heading ? (
+            <h3 key={i} className="detail-article-h">
+              {b.text}
+            </h3>
+          ) : (
+            <p key={i}>{b.text}</p>
+          ),
+        )}
+      </div>
+      {hasMore && (
+        <button
+          className="btn btn-ghost detail-article-toggle"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Mostrar menos" : "Leer más"}
+        </button>
+      )}
+      <div className="detail-article-source">
+        Fuente: artículo de{" "}
+        <a
+          href={data?.sourceUrl ?? "https://es.wikipedia.org"}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Wikipedia
+        </a>
+      </div>
+    </section>
+  );
+}
+
+const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+// Quita del artículo los párrafos iniciales que ya cubre la síntesis (ambos
+// salen del mismo artículo de Wikipedia, así que el inicio coincide).
+function stripSummaryOverlap(article: string, summary: string | null): string {
+  if (!summary) return article;
+  const sumN = normalize(summary).replace(/…$/, "").trim();
+  const paras = article.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  let i = 0;
+  while (i < paras.length) {
+    const probe = normalize(paras[i]).slice(0, 60);
+    if (probe.length >= 20 && sumN.includes(probe)) {
+      i++;
+      continue;
+    }
+    break;
+  }
+  return paras.slice(i).join("\n\n");
+}
+
+// Convierte el texto plano de Wikipedia en bloques: los "== Título ==" pasan a
+// encabezados; el resto, párrafos. Descarta secciones finales sin interés.
+function parseArticleBlocks(text: string): { heading: boolean; text: string }[] {
+  const SKIP = /^(véase también|referencias|notas|bibliografía|enlaces externos)$/i;
+  const out: { heading: boolean; text: string }[] = [];
+  for (const raw of text.split(/\n+/)) {
+    const p = raw.trim();
+    if (!p) continue;
+    const h = p.match(/^(={2,})\s*(.+?)\s*\1$/);
+    if (h) {
+      const title = h[2].trim();
+      if (SKIP.test(title)) break; // a partir de aquí, secciones de cierre
+      out.push({ heading: true, text: title });
+    } else {
+      out.push({ heading: false, text: p });
+    }
+  }
+  // Si quedó un encabezado huérfano al final, lo quitamos.
+  while (out.length && out[out.length - 1].heading) out.pop();
+  return out;
+}
+
 // ── Narrativa de IA ───────────────────────────────────────────────────────
-// Abierta a todos (free + ads). No se genera a demanda: si no existe, se
-// muestra un aviso. El contenido lo pre-genera el equipo (pregen + job diario).
+// Abierta a todos. Vitrina curada: solo unas pocas batallas tienen narrativa
+// ampliada redactada; cuando no existe, no se muestra la sección.
 
 const AI_TABS = [
   { key: "summary", label: "Story Mode" },
@@ -223,7 +363,10 @@ function AiStorySection({ slug }: { slug: string }) {
 
   return (
     <section className="detail-section">
-      <h2 className="detail-section-title">Narrativa por IA</h2>
+      <h2 className="detail-section-title detail-ai-title">
+        Narrativa ampliada
+        <span className="detail-ai-badge">IA</span>
+      </h2>
 
       {loading && !state && (
         <div className="skeleton" style={{ height: 160 }} />

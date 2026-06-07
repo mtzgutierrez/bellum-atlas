@@ -41,11 +41,18 @@ model Battle {
   wikipediaUrl    String?
   summary         String?    // extract de Wikipedia, opcional, sirve de seed
                              // para el prompt de IA. No es contenido AI.
+  article         String?    @db.Text // extracto COMPLETO de Wikipedia, cacheado
+                             // perezosamente al abrir la ficha. Contenido de
+                             // referencia, no generado por IA.
   type            BattleType @default(BATTLE)
 
   // 0-100. Proxy: nº de sitelinks de Wikidata normalizado. Battles con score
   // alto se pre-generan en IA.
   importanceScore Int        @default(0)
+
+  // Clave de orden cronológico = COALESCE(year, startYear). La mantiene un
+  // trigger en la BD (ver migración battle_sort_year); la ingesta no la escribe.
+  sortYear        Int?
 
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -55,6 +62,7 @@ model Battle {
   @@index([year])
   @@index([latitude, longitude])
   @@index([importanceScore])
+  @@index([sortYear])
   @@map("battles")
 }
 

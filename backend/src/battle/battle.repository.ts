@@ -51,6 +51,18 @@ export type BattleWithRelations = Prisma.BattleGetPayload<{
   include: typeof DETAIL_INCLUDE;
 }>;
 
+export interface BattleStats {
+  total: number;
+  byType: { type: 'BATTLE' | 'SIEGE' | 'CAMPAIGN'; count: number }[];
+  withImage: number;
+  withCoords: number;
+  withAi: number;
+  byCentury: { century: number; count: number }[];
+  yearMin: number | null;
+  yearMax: number | null;
+  topImportant: BattleSummary[];
+}
+
 export type BattleSort = 'importance' | 'year' | 'name';
 
 export type BattleFilters = {
@@ -147,6 +159,53 @@ export class BattleRepository {
     });
   }
 
+  // ─── Artículo de Wikipedia (backfill perezoso) ─────────────────────────
+  findArticleSource(
+    id: string,
+  ): Promise<{ id: string; article: string | null; wikipediaUrl: string | null } | null> {
+    return this.prisma.battle.findFirst({
+      where: { OR: [{ slug: id }, ...(isUuid(id) ? [{ id }] : [])] },
+      select: { id: true, article: true, wikipediaUrl: true },
+    });
+  }
+
+  async saveArticle(id: string, article: string): Promise<void> {
+    await this.prisma.battle.update({ where: { id }, data: { article } });
+  }
+
+  // ─── Agregados para la página de estadísticas ──────────────────────────
+  async stats(): Promise<BattleStats> {
+    const [total, byTypeRaw, withImage, withCoords, withAi, byCentury, agg, top] =
+      await Promise.all([
+        this.prisma.battle.count(),
+        this.prisma.battle.groupBy({ by: ['type'], _count: { _all: true } }),
+        this.prisma.battle.count({ where: { imageUrl: { not: null } } }),
+        this.prisma.battle.count({ where: { latitude: { not: null } } }),
+        this.prisma.battleAISummary.count(),
+        this.findCenturyFacets(),
+        this.prisma.battle.aggregate({
+          _min: { sortYear: true },
+          _max: { sortYear: true },
+        }),
+        this.prisma.battle.findMany({
+          orderBy: { importanceScore: 'desc' },
+          take: 8,
+          select: SUMMARY_SELECT,
+        }),
+      ]);
+    return {
+      total,
+      byType: byTypeRaw.map((t) => ({ type: t.type, count: t._count._all })),
+      withImage,
+      withCoords,
+      withAi,
+      byCentury,
+      yearMin: agg._min.sortYear,
+      yearMax: agg._max.sortYear,
+      topImportant: top,
+    };
+  }
+
   // ─── WHERE compartido (filtra null coords cuando lo pedimos) ───────────
   private buildWhere(
     f: BattleFilters,
@@ -201,7 +260,9 @@ export class BattleRepository {
 function orderByFor(sort?: BattleSort): Prisma.BattleOrderByWithRelationInput[] {
   switch (sort) {
     case 'year':
-      return [{ year: 'asc' }, { startYear: 'asc' }, { importanceScore: 'desc' }];
+      // sortYear = COALESCE(year, startYear): cronológico real, sin que las
+      // batallas con year nulo (solo rango) caigan al final.
+      return [{ sortYear: 'asc' }, { importanceScore: 'desc' }];
     case 'name':
       return [{ name: 'asc' }];
     case 'importance':

@@ -22,7 +22,8 @@
     "ingest": "nest start --entryFile ingest --",
     "pregen": "node dist/pregen.js",
     "ai:export": "nest start --entryFile ai-export --",
-    "ai:import": "nest start --entryFile ai-import --"
+    "ai:import": "nest start --entryFile ai-import --",
+    "backfill:articles": "nest start --entryFile backfill-articles --"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.97.1",

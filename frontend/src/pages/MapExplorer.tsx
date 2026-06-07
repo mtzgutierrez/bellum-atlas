@@ -7,7 +7,7 @@ import TypeIcon from '../components/TypeIcon'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useDebounce } from '../hooks/useDebounce'
 import { battleService } from '../services/battle.service'
-import type { BattlePoint } from '../services/battle.types'
+import type { BattlePoint, BattleType } from '../services/battle.types'
 import { formatBattleDates } from '../utils/dates'
 
 const YEAR_MIN = -3000
@@ -18,6 +18,21 @@ const YEAR_MAX = new Date().getFullYear()
 const MAX_SPAN = 150
 const DEFAULT_MAX = YEAR_MAX
 const DEFAULT_MIN = YEAR_MAX - MAX_SPAN
+// Umbral del filtro "solo las más relevantes" (importanceScore = nº sitelinks).
+const RELEVANT_MIN = 40
+// Radio de agrupación en píxeles de pantalla para el clustering propio.
+const CLUSTER_CELL = 58
+// Zoom mínimo para permitir "Buscar en esta zona": por debajo el área abarca
+// demasiado territorio (y demasiadas batallas).
+const MIN_AREA_ZOOM = 5
+
+type Bounds = { n: number; s: number; e: number; w: number }
+
+const TYPE_FILTERS: { value: BattleType; label: string }[] = [
+  { value: 'BATTLE', label: 'Batallas' },
+  { value: 'SIEGE', label: 'Asedios' },
+  { value: 'CAMPAIGN', label: 'Campañas' },
+]
 
 export default function MapExplorer() {
   const navigate = useNavigate()
@@ -27,21 +42,44 @@ export default function MapExplorer() {
   const [yearMin, setYearMin] = useState(DEFAULT_MIN)
   const [yearMax, setYearMax] = useState(DEFAULT_MAX)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [type, setType] = useState<BattleType | null>(null)
+  const [onlyRelevant, setOnlyRelevant] = useState(false)
+  // Modo "zona": filtra por el área del mapa (bbox) y todas las épocas.
+  const [area, setArea] = useState<Bounds | null>(null)
+  // Zoom actual: controla si se puede buscar por zona (evita áreas enormes).
+  const [zoom, setZoom] = useState(2)
 
   const debouncedQ = useDebounce(q, 300)
 
-  // Carga de puntos ligeros del mapa (capado a 10k en backend). Siempre se
-  // envía la ventana de años (lapso ≤ 150) para no traer todo el catálogo.
+  // Carga de puntos ligeros del mapa (capado a 10k en backend). En modo zona
+  // se manda el bbox (sin límite temporal); si no, la ventana de años.
   const fetcher = useCallback(() => {
     const text = debouncedQ.trim()
-    return battleService.puntos({
+    const base = {
       search: text.length >= 2 ? text : undefined,
-      yearMin,
-      yearMax,
-    })
-  }, [debouncedQ, yearMin, yearMax])
+      type: type ?? undefined,
+      minImportance: onlyRelevant ? RELEVANT_MIN : undefined,
+    }
+    if (area) {
+      return battleService.puntos({
+        ...base,
+        bboxN: area.n,
+        bboxS: area.s,
+        bboxE: area.e,
+        bboxW: area.w,
+      })
+    }
+    return battleService.puntos({ ...base, yearMin, yearMax })
+  }, [debouncedQ, type, onlyRelevant, area, yearMin, yearMax])
 
-  const { data, loading } = useApiFetch(fetcher, [debouncedQ, yearMin, yearMax])
+  const { data, loading } = useApiFetch(fetcher, [
+    debouncedQ,
+    type,
+    onlyRelevant,
+    area,
+    yearMin,
+    yearMax,
+  ])
   const items = useMemo(() => data ?? [], [data])
 
   // ── Foco desde URL (?focus=<slug>) ─────────────────────────────────────
@@ -56,7 +94,7 @@ export default function MapExplorer() {
   const mapEl = useRef<HTMLDivElement | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
   const focusLayerRef = useRef<L.LayerGroup | null>(null)
-  const markersById = useRef<Map<string, L.Marker>>(new Map())
+  const reclusterRef = useRef<() => void>(() => {})
   const [mapReady, setMapReady] = useState(false)
 
   useEffect(() => {
@@ -87,47 +125,55 @@ export default function MapExplorer() {
 
     layerRef.current = L.layerGroup().addTo(map)
     focusLayerRef.current = L.layerGroup().addTo(map)
+    // El clustering depende de la proyección actual: recalcular al mover/zoom.
+    map.on('moveend zoomend', () => {
+      reclusterRef.current()
+      setZoom(map.getZoom())
+    })
     mapRef.current = map
+    setZoom(map.getZoom())
     setMapReady(true)
   }, [])
 
-  // Pinta pines cuando cambian los items o la selección.
+  // Clustering propio por rejilla de pantalla: agrupa puntos cercanos en
+  // píxeles. 1 punto → marcador normal; varios → burbuja con el recuento que
+  // al pulsarse hace zoom. Se recalcula cuando cambian items/selección/vista.
   useEffect(() => {
-    const map = mapRef.current
-    const layer = layerRef.current
-    if (!map || !layer) return
-    layer.clearLayers()
-    markersById.current.clear()
+    const recluster = () => {
+      const map = mapRef.current
+      const layer = layerRef.current
+      if (!map || !layer) return
+      layer.clearLayers()
 
-    for (const b of items) {
-      const icon = L.divIcon({
-        html: `<div class="battle-pin ${selectedId === b.id ? 'selected' : ''}"></div>`,
-        className: 'battle-pin-wrap',
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      })
-      const marker = L.marker([b.latitude, b.longitude], { icon })
-        .bindPopup(buildPopup(b), {
-          className: 'ares-popup',
-          maxWidth: 260,
-          minWidth: 200,
-        })
-        .on('click', () => setSelectedId(b.id))
-        .on('popupopen', (e) => bindPopupNavigation(e.popup, b.slug, navigate))
-      marker.addTo(layer)
-      markersById.current.set(b.id, marker)
+      const cells = new Map<string, BattlePoint[]>()
+      for (const b of items) {
+        const p = map.latLngToContainerPoint([b.latitude, b.longitude])
+        const key = `${Math.floor(p.x / CLUSTER_CELL)}_${Math.floor(p.y / CLUSTER_CELL)}`
+        const arr = cells.get(key)
+        if (arr) arr.push(b)
+        else cells.set(key, [b])
+      }
+
+      for (const group of cells.values()) {
+        if (group.length === 1) {
+          addBattleMarker(group[0], layer, selectedId, setSelectedId, navigate)
+        } else {
+          addClusterMarker(group, layer, map)
+        }
+      }
     }
-  }, [items, selectedId, navigate])
+    reclusterRef.current = recluster
+    recluster()
+  }, [items, selectedId, navigate, mapReady])
 
-  // Centra y abre popup del seleccionado.
+  // Centra y abre popup del seleccionado (subiendo el zoom para "desagrupar").
   useEffect(() => {
     if (!selectedId) return
     const map = mapRef.current
-    const marker = markersById.current.get(selectedId)
-    if (!map || !marker) return
-    map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 5), { duration: 0.6 })
-    marker.openPopup()
-  }, [selectedId])
+    const b = items.find((x) => x.id === selectedId)
+    if (!map || !b) return
+    map.flyTo([b.latitude, b.longitude], Math.max(map.getZoom(), 6), { duration: 0.6 })
+  }, [selectedId, items])
 
   // Marker de "foco" cuando llegamos con ?focus=<slug>.
   useEffect(() => {
@@ -137,6 +183,16 @@ export default function MapExplorer() {
     layer.clearLayers()
     if (!focusBattle || focusBattle.latitude == null || focusBattle.longitude == null) {
       return
+    }
+    // Centra la ventana de años en la fecha de la batalla, para que aparezca
+    // entre los puntos normales (y su contexto de época) en vez de quedar fuera
+    // de la ventana por defecto. Salimos del modo zona si estaba activo.
+    const ref = focusBattle.year ?? focusBattle.startYear ?? focusBattle.endYear
+    if (ref != null) {
+      const [lo, hi] = centeredWindow(ref)
+      setArea(null)
+      setYearMin(lo)
+      setYearMax(hi)
     }
     const point: BattlePoint = {
       id: focusBattle.id,
@@ -172,9 +228,19 @@ export default function MapExplorer() {
       .addTo(layer)
     map.flyTo([point.latitude, point.longitude], 6, { duration: 0.6 })
     marker.openPopup()
-    // Defer state update to avoid cascading renders
     queueMicrotask(() => setSelectedId(point.id))
   }, [focusBattle, mapReady, navigate])
+
+  // ── Acciones ────────────────────────────────────────────────────────────
+  const canSearchArea = zoom >= MIN_AREA_ZOOM
+
+  const searchThisArea = () => {
+    const map = mapRef.current
+    if (!map || map.getZoom() < MIN_AREA_ZOOM) return
+    const b = map.getBounds()
+    setArea({ n: b.getNorth(), s: b.getSouth(), e: b.getEast(), w: b.getWest() })
+    setSelectedId(null)
+  }
 
   const clearFocus = () => {
     if (focusSlug) {
@@ -188,6 +254,9 @@ export default function MapExplorer() {
     setQ('')
     setYearMin(DEFAULT_MIN)
     setYearMax(DEFAULT_MAX)
+    setType(null)
+    setOnlyRelevant(false)
+    setArea(null)
     clearFocus()
   }
 
@@ -195,7 +264,12 @@ export default function MapExplorer() {
     q.length > 0 ||
     yearMin !== DEFAULT_MIN ||
     yearMax !== DEFAULT_MAX ||
+    type != null ||
+    onlyRelevant ||
+    area != null ||
     focusSlug != null
+
+  const summary = useMemo(() => summarize(items), [items])
 
   return (
     <div className="map-page">
@@ -222,25 +296,72 @@ export default function MapExplorer() {
             </div>
           </div>
 
+          {/* Tipo */}
           <div className="filter-group">
             <label className="filter-label">
-              <span>Periodo</span>
-              <span className="value">
-                {formatYearLabel(yearMin)} — {formatYearLabel(yearMax)}
-              </span>
+              <span>Tipo</span>
             </label>
-            <DualRange
-              min={YEAR_MIN}
-              max={YEAR_MAX}
-              maxSpan={MAX_SPAN}
-              valueMin={yearMin}
-              valueMax={yearMax}
-              onChange={(a, b) => {
-                setYearMin(a)
-                setYearMax(b)
-              }}
-            />
+            <div className="chip-row">
+              <button
+                className={`map-chip ${type == null ? 'active' : ''}`}
+                onClick={() => setType(null)}
+              >
+                Todos
+              </button>
+              {TYPE_FILTERS.map((t) => (
+                <button
+                  key={t.value}
+                  className={`map-chip ${type === t.value ? 'active' : ''}`}
+                  onClick={() => setType((cur) => (cur === t.value ? null : t.value))}
+                >
+                  <TypeIcon type={t.value} size={11} /> {t.label}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Relevancia */}
+          <label className="map-toggle">
+            <input
+              type="checkbox"
+              checked={onlyRelevant}
+              onChange={(e) => setOnlyRelevant(e.target.checked)}
+            />
+            <span>Solo las más relevantes</span>
+          </label>
+
+          {/* Periodo o modo zona */}
+          {area ? (
+            <div className="filter-group">
+              <div className="map-area-chip">
+                <Icon name="map" size={13} />
+                <span>Zona del mapa · todas las épocas</span>
+                <button onClick={() => setArea(null)} aria-label="Quitar zona">
+                  ✕
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="filter-group">
+              <label className="filter-label">
+                <span>Periodo</span>
+                <span className="value">
+                  {formatYearLabel(yearMin)} — {formatYearLabel(yearMax)}
+                </span>
+              </label>
+              <DualRange
+                min={YEAR_MIN}
+                max={YEAR_MAX}
+                maxSpan={MAX_SPAN}
+                valueMin={yearMin}
+                valueMax={yearMax}
+                onChange={(a, b) => {
+                  setYearMin(a)
+                  setYearMax(b)
+                }}
+              />
+            </div>
+          )}
 
           {hasFilters && (
             <button className="btn-link" onClick={reset} style={{ alignSelf: 'flex-start' }}>
@@ -251,13 +372,28 @@ export default function MapExplorer() {
 
         <div className="map-results">
           <div className="map-results-header">
-            <span>Resultados</span>
+            <span>{area ? 'En esta zona' : 'Resultados'}</span>
             <span>
               {loading
                 ? '…'
                 : `${items.length.toLocaleString('es-ES')} registro${items.length === 1 ? '' : 's'}`}
             </span>
           </div>
+
+          {/* Resumen de la zona / selección */}
+          {!loading && items.length > 0 && (
+            <div className="map-summary">
+              {summary.era && <span className="map-summary-era">{summary.era}</span>}
+              <span className="map-summary-types">
+                {summary.byType.map((t) => (
+                  <span key={t.type} className="map-summary-type">
+                    <TypeIcon type={t.type} size={10} /> {t.count}
+                  </span>
+                ))}
+              </span>
+            </div>
+          )}
+
           {!loading && items.length === 0 && (
             <div
               style={{
@@ -299,6 +435,19 @@ export default function MapExplorer() {
 
       <div className="map-canvas">
         <div id="leaflet-map" ref={mapEl} />
+
+        {/* Buscar en esta zona (solo con suficiente zoom) */}
+        <button
+          className={`map-area-btn ${canSearchArea ? '' : 'is-disabled'}`}
+          onClick={searchThisArea}
+          disabled={!canSearchArea}
+        >
+          <Icon name={canSearchArea ? 'search' : 'crosshair'} size={14} />{' '}
+          {canSearchArea
+            ? 'Buscar en esta zona'
+            : 'Acerca el mapa a una zona para buscar'}
+        </button>
+
         <div className="map-legend" aria-hidden="true">
           <div className="item">
             <span className="swatch crimson" /> Batalla registrada
@@ -310,6 +459,86 @@ export default function MapExplorer() {
       </div>
     </div>
   )
+}
+
+// ── helpers de marcadores ──────────────────────────────────────────────────
+
+function addBattleMarker(
+  b: BattlePoint,
+  layer: L.LayerGroup,
+  selectedId: string | null,
+  setSelectedId: (id: string) => void,
+  navigate: (path: string) => void,
+): void {
+  const icon = L.divIcon({
+    html: `<div class="battle-pin ${selectedId === b.id ? 'selected' : ''}"></div>`,
+    className: 'battle-pin-wrap',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  })
+  const marker = L.marker([b.latitude, b.longitude], { icon })
+    .bindPopup(buildPopup(b), { className: 'ares-popup', maxWidth: 260, minWidth: 200 })
+    .on('click', () => setSelectedId(b.id))
+    .on('popupopen', (e) => bindPopupNavigation(e.popup, b.slug, navigate))
+  marker.addTo(layer)
+  if (selectedId === b.id) marker.openPopup()
+}
+
+function addClusterMarker(group: BattlePoint[], layer: L.LayerGroup, map: L.Map): void {
+  // Centroide del grupo.
+  let lat = 0
+  let lng = 0
+  for (const b of group) {
+    lat += b.latitude
+    lng += b.longitude
+  }
+  lat /= group.length
+  lng /= group.length
+
+  const n = group.length
+  const size = n >= 100 ? 46 : n >= 25 ? 40 : 34
+  const icon = L.divIcon({
+    html: `<div class="map-cluster" style="width:${size}px;height:${size}px">${n}</div>`,
+    className: 'map-cluster-wrap',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  })
+  L.marker([lat, lng], { icon })
+    .on('click', () => {
+      map.flyTo([lat, lng], Math.min(map.getZoom() + 2, 12), { duration: 0.5 })
+    })
+    .addTo(layer)
+}
+
+// ── helpers de resumen ──────────────────────────────────────────────────────
+
+function summarize(items: BattlePoint[]): {
+  era: string | null
+  byType: { type: BattleType; count: number }[]
+} {
+  if (items.length === 0) return { era: null, byType: [] }
+  const counts = new Map<BattleType, number>()
+  let min = Infinity
+  let max = -Infinity
+  for (const b of items) {
+    counts.set(b.type, (counts.get(b.type) ?? 0) + 1)
+    const y = b.year ?? b.startYear ?? b.endYear
+    if (y != null) {
+      if (y < min) min = y
+      if (y > max) max = y
+    }
+  }
+  const order: BattleType[] = ['BATTLE', 'SIEGE', 'CAMPAIGN']
+  const byType = order
+    .filter((t) => counts.has(t))
+    .map((t) => ({ type: t, count: counts.get(t)! }))
+  const era =
+    min === Infinity
+      ? null
+      : min === max
+        ? formatYearLabel(min)
+        : `${formatYearLabel(min)} — ${formatYearLabel(max)}`
+  return { era, byType }
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -353,6 +582,23 @@ function formatYearLabel(y: number): string {
   if (y === 0) return '0'
   if (y < 0) return `${Math.abs(y)} AC`
   return String(y)
+}
+
+// Ventana de MAX_SPAN años centrada en `ref` (la fecha de la batalla queda en
+// medio), desplazada si toca los límites para conservar el ancho.
+function centeredWindow(ref: number): [number, number] {
+  const half = Math.floor(MAX_SPAN / 2)
+  let lo = ref - half
+  let hi = lo + MAX_SPAN
+  if (lo < YEAR_MIN) {
+    lo = YEAR_MIN
+    hi = Math.min(YEAR_MAX, lo + MAX_SPAN)
+  }
+  if (hi > YEAR_MAX) {
+    hi = YEAR_MAX
+    lo = Math.max(YEAR_MIN, hi - MAX_SPAN)
+  }
+  return [lo, hi]
 }
 
 // ── DualRange ──────────────────────────────────────────────────────────────

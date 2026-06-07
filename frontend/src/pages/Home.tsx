@@ -6,13 +6,6 @@ import { useApiFetch } from '../hooks/useApiFetch'
 import { battleService } from '../services/battle.service'
 
 export default function Home() {
-  const fetcher = useCallback(
-    () => battleService.listar({ pageSize: 8 }),
-    [],
-  )
-  const { data } = useApiFetch(fetcher, [])
-  const featured = data?.data ?? []
-
   const efemFetcher = useCallback(() => battleService.efemerides(), [])
   const { data: efemerides } = useApiFetch(efemFetcher, [])
   const today = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })
@@ -23,21 +16,19 @@ export default function Home() {
       <section className="home-hero">
         <div className="home-eyebrow">Archivo histórico militar</div>
         <h1 className="home-title">
-          La guerra
+          Geografía e Historia
           <br />
-          <span className="accent">en geografía</span> y tiempo.
+          <span className="accent">del Conflicto</span>.
         </h1>
         <p className="home-lede">
-          Un atlas interactivo de las batallas que dieron forma a la historia. Sin
-          gamificación, sin estadísticas inventadas: solo los hechos, situados sobre
-          el mapa, con su fecha y sus bandos.
+          Un atlas interactivo de las batallas que dieron forma a la historia.
         </p>
         <div className="home-cta-row">
           <Link to="/map" className="btn btn-primary">
             Explorar el mapa <Icon name="arrow-right" size={14} />
           </Link>
           <Link to="/battles" className="btn btn-ghost">
-            Ver el catálogo
+            Buscar Batallas
           </Link>
         </div>
       </section>
@@ -58,23 +49,6 @@ export default function Home() {
           </div>
         </section>
       )}
-
-      <section className="home-featured">
-        <div className="home-featured-head">
-          <h2>Destacadas</h2>
-          <span className="rule" />
-          <Link to="/battles" className="more">
-            Catálogo completo →
-          </Link>
-        </div>
-        <div className="home-featured-grid">
-          {featured.length === 0
-            ? Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="skeleton" style={{ height: 260 }} />
-              ))
-            : featured.slice(0, 4).map((b) => <BattleCard key={b.id} battle={b} />)}
-        </div>
-      </section>
     </main>
   )
 }
