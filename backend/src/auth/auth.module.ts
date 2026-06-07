@@ -4,7 +4,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthMiddleware } from './auth.middleware';
 import { AuthService } from './auth.service';
-import { PremiumGuard } from './premium.guard';
 
 @Global()
 @Module({
@@ -24,8 +23,8 @@ import { PremiumGuard } from './premium.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, PremiumGuard],
-  exports: [AuthService, PremiumGuard, JwtModule],
+  providers: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule implements NestModule {
   // Se aplica a todas las rutas para que cualquier endpoint pueda leer

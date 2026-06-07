@@ -4,8 +4,8 @@
 const BASE = '/api'
 
 // El token JWT (tier free/premium) se guarda en localStorage y se adjunta a
-// todas las peticiones. El backend lo ignora en rutas free y lo exige en las
-// premium (p.ej. la historia de IA).
+// todas las peticiones. Hoy ninguna ruta lo exige (la narrativa de IA es
+// abierta); el backend solo lo lee si está presente.
 const TOKEN_KEY = 'ares.token'
 
 export function getToken(): string | null {

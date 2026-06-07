@@ -20,7 +20,9 @@ export default function Timeline() {
   useEffect(() => {
     if (century == null && centuries.length > 0) {
       const top = centuries.reduce((a, b) => (b.count > a.count ? b : a))
-      setCentury(top.century)
+      // Avoid calling setState synchronously inside the effect body to prevent
+      // cascading renders — schedule it on the next macrotask.
+      setTimeout(() => setCentury(top.century), 0)
     }
   }, [centuries, century])
 

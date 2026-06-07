@@ -113,7 +113,7 @@ export class BattlesQueryDto {
   @ApiPropertyOptional({ description: 'Tamaño página' }) pageSize?: string;
 }
 
-// ─── IA (respuestas del endpoint Premium) ───────────────────────────────────
+// ─── IA (respuestas del endpoint abierto de narrativa) ──────────────────────
 
 export class BattleAIStoryDto {
   @ApiProperty() summary!: string;

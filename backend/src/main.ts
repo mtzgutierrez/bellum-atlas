@@ -10,8 +10,8 @@ async function bootstrap() {
     .setTitle('AresCodex API')
     .setDescription(
       'Atlas histórico interactivo de conflictos militares.\n\n' +
-        'El endpoint Premium `GET /battles/:id/ai-story` requiere un JWT ' +
-        '(Bearer) con tier `premium`. Consíguelo en `POST /auth/dev-token`.',
+        'La narrativa por IA (`GET /battles/:id/ai-story`) es abierta a todos: ' +
+        'devuelve el contenido pre-generado o `unavailable` si aún no existe.',
     )
     .setVersion('1.0')
     .addBearerAuth()

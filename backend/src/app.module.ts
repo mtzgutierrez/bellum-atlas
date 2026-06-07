@@ -16,9 +16,8 @@ import { PrismaModule } from './prisma/prisma.module';
       isGlobal: true,
       envFilePath: join(__dirname, '..', '.env'),
     }),
-    // Rate limiting (regla 4.3). El límite global es generoso para el Free
-    // Tier (listados, puntos del mapa). El endpoint Premium de IA lo endurece
-    // localmente con @Throttle(...) en su propio controller.
+    // Rate limiting (regla 4.3). Límite global generoso para listados, puntos
+    // del mapa y la narrativa de IA (abierta a todos).
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     PrismaModule,
     AuthModule,

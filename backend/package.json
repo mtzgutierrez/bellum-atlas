@@ -20,7 +20,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "nest start --entryFile seed",
     "ingest": "nest start --entryFile ingest --",
-    "pregen": "node dist/pregen.js"
+    "pregen": "node dist/pregen.js",
+    "ai:export": "nest start --entryFile ai-export --",
+    "ai:import": "nest start --entryFile ai-import --"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.97.1",

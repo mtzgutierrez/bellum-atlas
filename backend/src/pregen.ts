@@ -55,9 +55,16 @@ async function main() {
     },
   });
 
+  // SEGURIDAD: re-generar implica BORRAR la narrativa existente, que es cara de
+  // producir. Por defecto NO se borra nada: las fichas ya generadas se preservan
+  // y solo se encolan las que faltan. Para regenerar de verdad (cambiar de tier/
+  // modelo) hay que pedirlo explícitamente con PREGEN_ALLOW_DELETE=true.
+  const allowDelete = (process.env.PREGEN_ALLOW_DELETE ?? '').toLowerCase() === 'true';
+
   let webQueued = 0;
   let basicQueued = 0;
   let skipped = 0;
+  let preserved = 0;
   for (let i = 0; i < top.length; i++) {
     const b = top[i];
     const wantWeb = i < webCount;
@@ -68,8 +75,14 @@ async function main() {
       skipped += 1;
       continue;
     }
-    // Cambiar de tier/modelo: borramos la narrativa actual (el worker salta si
-    // existe) y re-encolamos con el tier correcto.
+    // Existe pero difiere de tier/modelo. Sin permiso explícito, la PRESERVAMOS
+    // (no se borra ni se re-encola) para no destruir contenido pagado.
+    if (cur && !allowDelete) {
+      preserved += 1;
+      continue;
+    }
+    // Cambiar de tier/modelo con permiso: borramos la narrativa actual (el
+    // worker salta si existe) y re-encolamos con el tier correcto.
     if (cur) {
       await prisma.battleAISummary.delete({ where: { battleId: b.id } });
     }
@@ -90,7 +103,10 @@ async function main() {
   }
 
   console.log(
-    `\nPre-generación (modelo ${model}): web ${webQueued}, básica ${basicQueued}, ya al día ${skipped} (de top ${top.length}).`,
+    `\nPre-generación (modelo ${model}): web ${webQueued}, básica ${basicQueued}, ` +
+      `ya al día ${skipped}, preservadas ${preserved}` +
+      `${preserved && !allowDelete ? ' (usa PREGEN_ALLOW_DELETE=true para regenerarlas)' : ''} ` +
+      `(de top ${top.length}).`,
   );
   console.log('El worker del backend las irá generando en segundo plano.');
 

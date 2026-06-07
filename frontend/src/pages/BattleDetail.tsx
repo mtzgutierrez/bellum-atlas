@@ -1,31 +1,37 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import BattleCard from '../components/BattleCard'
-import BattleMiniMap from '../components/BattleMiniMap'
-import Icon from '../components/Icon'
-import SmartImage, { TYPE_LABEL } from '../components/SmartImage'
-import TypeIcon from '../components/TypeIcon'
-import { useApiFetch } from '../hooks/useApiFetch'
-import { aiService } from '../services/ai.service'
-import type { AIStoryState } from '../services/ai.types'
-import { battleService } from '../services/battle.service'
-import type { BattleDetail } from '../services/battle.types'
-import { formatBattleDates } from '../utils/dates'
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import BattleCard from "../components/BattleCard";
+import BattleMiniMap from "../components/BattleMiniMap";
+import Icon from "../components/Icon";
+import SmartImage, { TYPE_LABEL } from "../components/SmartImage";
+import TypeIcon from "../components/TypeIcon";
+import { useApiFetch } from "../hooks/useApiFetch";
+import { aiService } from "../services/ai.service";
+import type { AIStoryState } from "../services/ai.types";
+import { battleService } from "../services/battle.service";
+import type { BattleDetail } from "../services/battle.types";
+import { formatBattleDates } from "../utils/dates";
 
 export default function BattleDetailPage() {
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-  const fetcher = useCallback(() => battleService.detalle(id!), [id])
-  const { data: battle, loading, error } = useApiFetch(fetcher, [id])
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const fetcher = useCallback(() => battleService.detalle(id!), [id]);
+  const { data: battle, loading, error } = useApiFetch(fetcher, [id]);
 
   if (loading) {
     return (
       <main className="detail">
-        <div className="skeleton" style={{ height: 32, width: '40%', marginBottom: 24 }} />
-        <div className="skeleton" style={{ height: 64, width: '70%', marginBottom: 48 }} />
+        <div
+          className="skeleton"
+          style={{ height: 32, width: "40%", marginBottom: 24 }}
+        />
+        <div
+          className="skeleton"
+          style={{ height: 64, width: "70%", marginBottom: 48 }}
+        />
         <div className="skeleton" style={{ height: 320, marginBottom: 24 }} />
       </main>
-    )
+    );
   }
   if (error || !battle) {
     return (
@@ -36,31 +42,35 @@ export default function BattleDetailPage() {
           <span>—</span>
         </div>
         <h1 className="detail-title">Registro no encontrado.</h1>
-        <button className="btn btn-ghost" onClick={() => navigate('/battles')}>
+        <button className="btn btn-ghost" onClick={() => navigate("/battles")}>
           Volver al catálogo
         </button>
       </main>
-    )
+    );
   }
 
-  return <Detail battle={battle} />
+  return <Detail battle={battle} />;
 }
 
 function Detail({ battle }: { battle: BattleDetail }) {
-  const typeLabel = TYPE_LABEL[battle.type] ?? '—'
-  const hasCoords = battle.latitude != null && battle.longitude != null
+  const typeLabel = TYPE_LABEL[battle.type] ?? "—";
+  const hasCoords = battle.latitude != null && battle.longitude != null;
 
   return (
     <main className="detail">
       <div className="detail-breadcrumb">
         <Link to="/battles">Catálogo</Link>
         <Icon name="chevron-right" size={12} />
-        <span style={{ color: 'var(--color-text-primary)' }}>{battle.name}</span>
+        <span style={{ color: "var(--color-text-primary)" }}>
+          {battle.name}
+        </span>
       </div>
 
       <header className="detail-header">
         <div className="detail-eyebrow">
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
             <TypeIcon type={battle.type} size={12} /> {typeLabel}
           </span>
         </div>
@@ -74,7 +84,10 @@ function Detail({ battle }: { battle: BattleDetail }) {
             <>
               <span className="item">
                 <Icon name="map-pin" />
-                <span className="font-mono" style={{ color: 'var(--color-text-muted)' }}>
+                <span
+                  className="font-mono"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
                   {battle.latitude!.toFixed(2)}, {battle.longitude!.toFixed(2)}
                 </span>
               </span>
@@ -130,27 +143,34 @@ function Detail({ battle }: { battle: BattleDetail }) {
             rel="noopener noreferrer"
             className="btn-link"
           >
-            Leer el artículo completo en Wikipedia <Icon name="external" size={12} />
+            Leer el artículo completo en Wikipedia{" "}
+            <Icon name="external" size={12} />
           </a>
         </section>
       )}
     </main>
-  )
+  );
 }
 
 // ── Batallas de la misma época ───────────────────────────────────────────────
 // Sustituye a la relación por guerra: batallas en una ventana de ±20 años.
 
 function RelatedBattles({ battle }: { battle: BattleDetail }) {
-  const ref = battle.year ?? battle.startYear
+  const ref = battle.year ?? battle.startYear;
   const fetcher = useCallback(() => {
-    if (ref == null) return Promise.resolve(null)
-    return battleService.listar({ yearMin: ref - 20, yearMax: ref + 20, pageSize: 7 })
-  }, [ref])
-  const { data } = useApiFetch(fetcher, [ref])
+    if (ref == null) return Promise.resolve(null);
+    return battleService.listar({
+      yearMin: ref - 20,
+      yearMax: ref + 20,
+      pageSize: 7,
+    });
+  }, [ref]);
+  const { data } = useApiFetch(fetcher, [ref]);
 
-  const items = (data?.data ?? []).filter((b) => b.slug !== battle.slug).slice(0, 6)
-  if (ref == null || items.length === 0) return null
+  const items = (data?.data ?? [])
+    .filter((b) => b.slug !== battle.slug)
+    .slice(0, 6);
+  if (ref == null || items.length === 0) return null;
 
   return (
     <section className="detail-section">
@@ -161,7 +181,7 @@ function RelatedBattles({ battle }: { battle: BattleDetail }) {
         ))}
       </div>
     </section>
-  )
+  );
 }
 
 // ── Narrativa de IA ───────────────────────────────────────────────────────
@@ -169,47 +189,56 @@ function RelatedBattles({ battle }: { battle: BattleDetail }) {
 // muestra un aviso. El contenido lo pre-genera el equipo (pregen + job diario).
 
 const AI_TABS = [
-  { key: 'summary', label: 'Story Mode' },
-  { key: 'context', label: 'Contexto estratégico' },
-  { key: 'outcome', label: 'Resultado' },
-  { key: 'curiosities', label: 'Curiosidades' },
-] as const
+  { key: "summary", label: "Story Mode" },
+  { key: "context", label: "Contexto estratégico" },
+  { key: "outcome", label: "Resultado" },
+  { key: "curiosities", label: "Curiosidades" },
+] as const;
 
-type AiTabKey = (typeof AI_TABS)[number]['key']
+type AiTabKey = (typeof AI_TABS)[number]["key"];
 
 function AiStorySection({ slug }: { slug: string }) {
-  const [state, setState] = useState<AIStoryState | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [tab, setTab] = useState<AiTabKey>('summary')
+  const [state, setState] = useState<AIStoryState | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<AiTabKey>("summary");
 
   const load = useCallback(async () => {
-    setLoading(true)
+    setLoading(true);
     try {
-      setState(await aiService.historia(slug))
+      setState(await aiService.historia(slug));
     } catch {
-      setState(null)
+      setState(null);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [slug])
+  }, [slug]);
 
   useEffect(() => {
-    void load()
-  }, [load])
+    Promise.resolve().then(() => void load());
+  }, [load]);
 
   // Si no hay narrativa aún, ni siquiera mostramos la sección (no hay nada que
   // ofrecer y no se puede pedir su generación).
-  if (!loading && (!state || state.kind !== 'ready')) return null
+  if (!loading && (!state || state.kind !== "ready")) return null;
 
   return (
     <section className="detail-section">
       <h2 className="detail-section-title">Narrativa por IA</h2>
 
-      {loading && !state && <div className="skeleton" style={{ height: 160 }} />}
+      {loading && !state && (
+        <div className="skeleton" style={{ height: 160 }} />
+      )}
 
-      {state?.kind === 'ready' && (
+      {state?.kind === "ready" && (
         <div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              marginBottom: 16,
+            }}
+          >
             {AI_TABS.map((t) => (
               <button
                 key={t.key}
@@ -217,9 +246,9 @@ function AiStorySection({ slug }: { slug: string }) {
                 style={
                   tab === t.key
                     ? {
-                        background: 'var(--color-gold, #b8860b)',
-                        color: 'var(--color-bg, #0d0d0d)',
-                        borderColor: 'var(--color-gold, #b8860b)',
+                        background: "var(--color-gold, #b8860b)",
+                        color: "var(--color-bg, #0d0d0d)",
+                        borderColor: "var(--color-gold, #b8860b)",
                       }
                     : undefined
                 }
@@ -236,13 +265,17 @@ function AiStorySection({ slug }: { slug: string }) {
           </div>
           <div
             className="font-mono"
-            style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 12 }}
+            style={{
+              fontSize: 11,
+              color: "var(--color-text-muted)",
+              marginTop: 12,
+            }}
           >
-            Generado por {state.story.modelUsed} ·{' '}
-            {new Date(state.story.generatedAt).toLocaleString('es-ES')}
+            Generado por IA a partir de datos históricos. La precisión no está
+            garantizada.{" "}
           </div>
         </div>
       )}
     </section>
-  )
+  );
 }

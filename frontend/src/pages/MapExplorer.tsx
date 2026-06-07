@@ -170,9 +170,10 @@ export default function MapExplorer() {
       })
       .on('popupopen', (e) => bindPopupNavigation(e.popup, point.slug, navigate))
       .addTo(layer)
-    setSelectedId(point.id)
     map.flyTo([point.latitude, point.longitude], 6, { duration: 0.6 })
     marker.openPopup()
+    // Defer state update to avoid cascading renders
+    queueMicrotask(() => setSelectedId(point.id))
   }, [focusBattle, mapReady, navigate])
 
   const clearFocus = () => {
