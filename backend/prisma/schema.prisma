@@ -70,8 +70,9 @@ model BattleAISummary {
   outcome     String   @db.Text     // resultado y consecuencias
   curiosities String   @db.Text     // anécdotas y datos curiosos
 
-  modelUsed   String                // p.ej. "claude-sonnet-4-6" o "mock"
-  promptHash  String                // hash del prompt usado, para auditar
+  modelUsed     String              // p.ej. "claude-sonnet-4-6" o "mock"
+  promptHash    String              // hash del prompt usado, para auditar
+  usedWebSearch Boolean @default(false) // true = enriquecida con búsqueda web
 
   createdAt   DateTime @default(now())
 

@@ -13,14 +13,19 @@ export class AiQueueService {
     @InjectQueue(AI_QUEUE_NAME) private readonly queue: Queue<GenerateAIJobData>,
   ) {}
 
-  // jobId estable (battleId) → idempotencia: encolar dos veces la misma
-  // batalla sigue siendo un solo job pendiente.
+  // jobId estable (battleId) para deduplicar peticiones simultáneas. Antes de
+  // encolar, eliminamos cualquier job previo con ese id (completado/fallido/en
+  // espera): si no, BullMQ ignoraría el re-encolado y nunca se regeneraría una
+  // batalla cuyo resumen se ha borrado. (Si el job está activo, remove() falla
+  // y lo ignoramos: ya se está generando.) El worker, además, salta si el
+  // resumen ya existe, así que esto solo dispara generación cuando hace falta.
   async enqueue(data: GenerateAIJobData): Promise<void> {
+    await this.queue.remove(data.battleId).catch(() => undefined);
     await this.queue.add('generate', data, {
       jobId: data.battleId,
       attempts: 3,
       backoff: { type: 'exponential', delay: 30_000 },
-      removeOnComplete: { age: 3600 * 24, count: 500 },
+      removeOnComplete: true,
       removeOnFail: { age: 3600 * 24 * 7 },
     });
     this.logger.log(`Encolado IA para ${data.battleId} (${data.reason})`);

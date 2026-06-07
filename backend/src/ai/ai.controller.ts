@@ -5,49 +5,27 @@ import {
   HttpStatus,
   NotFoundException,
   Param,
-  UseGuards,
 } from '@nestjs/common';
-import {
-  ApiOkResponse,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
-import { PremiumGuard } from '../auth/premium.guard';
+import { ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   BattleAIStoryDto,
   BattleAIStoryPendingDto,
 } from '../battle/dto/battle.dto';
-import { AiQueueService } from './ai-queue.service';
 
 @ApiTags('IA')
 @Controller('battles/:id/ai-story')
-@UseGuards(PremiumGuard)
-// Premium tier con rate limit controlado (regla 4.3): 30 peticiones/min por
-// IP. Mucho más estricto que el global. El coste real de IA está acotado
-// aparte por el caché permanente (no se regenera lo ya generado).
-@Throttle({ default: { limit: 30, ttl: 60_000 } })
 export class AiController {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly queue: AiQueueService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  // Endpoint Premium. Si la historia existe → 200 con el contenido.
-  // Si no existe → 202 + encola y devuelve "pending" para que el front
-  // muestre estado de generación. NUNCA llama al LLM en línea.
+  // Narrativa por IA, ABIERTA a todos (modelo free + ads). NO se genera a
+  // demanda del usuario: si no existe todavía, se devuelve "unavailable". El
+  // contenido se pre-genera/actualiza por procesos propios (pregen + job
+  // diario), nunca desde esta petición.
   @Get()
-  @ApiOperation({
-    summary: 'Historia narrativa generada por IA (cache permanente).',
-  })
+  @ApiOperation({ summary: 'Narrativa por IA (solo pre-generada; nunca on-demand).' })
   @ApiOkResponse({ type: BattleAIStoryDto })
-  @ApiResponse({
-    status: HttpStatus.ACCEPTED,
-    type: BattleAIStoryPendingDto,
-    description: 'Generación en curso',
-  })
+  @ApiResponse({ status: HttpStatus.OK, type: BattleAIStoryPendingDto })
   @HttpCode(HttpStatus.OK)
   async aiStory(
     @Param('id') id: string,
@@ -70,12 +48,8 @@ export class AiController {
       };
     }
 
-    await this.queue.enqueue({
-      battleId: battle.id,
-      reason: 'on-demand-request',
-    });
-    const position = await this.queue.queuePosition(battle.id);
-    return { status: 'pending', queuePosition: position };
+    // Aún no pre-generada: no se encola nada.
+    return { status: 'unavailable' };
   }
 }
 

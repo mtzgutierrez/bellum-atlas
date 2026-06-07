@@ -5,23 +5,26 @@ import type { AIStory, BattleAIInput } from './ai.types';
 
 // Servicio único de cara al worker. Internamente decide:
 //   - AI_PROVIDER=mock      → genera plantilla local, cero coste.
-//   - AI_PROVIDER=anthropic → llama a Claude con prompt caching.
-//
-// El system prompt es estable (no cambia entre batallas) por lo que activamos
-// `cache_control` para que Anthropic reutilice los tokens. Reduce coste
-// drásticamente cuando procesamos colas largas.
+//   - AI_PROVIDER=anthropic → llama a Claude con prompt caching y, si está
+//     habilitado (AI_WEB_SEARCH), la herramienta de búsqueda web para ampliar
+//     y verificar con fuentes externas.
 @Injectable()
 export class LlmService implements OnModuleInit {
   private readonly logger = new Logger(LlmService.name);
   private provider: 'mock' | 'anthropic' = 'mock';
   private anthropic?: Anthropic;
   private model = 'claude-sonnet-4-6';
+  // Kill-switch global: si AI_WEB_SEARCH=false, ninguna generación usa búsqueda
+  // web aunque el job la pida. El tier (web vs básica) lo decide cada job.
+  private webSearchAllowed = true;
 
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit(): void {
     const provider = (this.config.get<string>('AI_PROVIDER') ?? 'mock').toLowerCase();
     this.model = this.config.get<string>('AI_MODEL') ?? 'claude-sonnet-4-6';
+    this.webSearchAllowed =
+      (this.config.get<string>('AI_WEB_SEARCH') ?? 'true').toLowerCase() !== 'false';
     if (provider === 'anthropic') {
       const key = this.config.get<string>('ANTHROPIC_API_KEY');
       if (!key) {
@@ -32,7 +35,9 @@ export class LlmService implements OnModuleInit {
       }
       this.anthropic = new Anthropic({ apiKey: key });
       this.provider = 'anthropic';
-      this.logger.log(`LLM listo: anthropic (${this.model})`);
+      this.logger.log(
+        `LLM listo: anthropic (${this.model})${this.webSearchAllowed ? ' + web search disponible' : ' (web search desactivada)'}`,
+      );
     } else {
       this.logger.log('LLM listo: mock (sin coste, sin red)');
     }
@@ -42,67 +47,121 @@ export class LlmService implements OnModuleInit {
     return this.provider === 'mock' ? 'mock' : this.model;
   }
 
-  async generate(input: BattleAIInput): Promise<AIStory> {
-    return this.provider === 'anthropic'
-      ? this.callAnthropic(input)
-      : this.mock(input);
+  // ¿Usa un proveedor real (no mock)? Lo usa el worker para marcar usedWebSearch.
+  isReal(): boolean {
+    return this.provider === 'anthropic';
+  }
+
+  // `webSearch` lo decide cada job (tier). El env AI_WEB_SEARCH puede vetarlo.
+  async generate(
+    input: BattleAIInput,
+    opts: { webSearch?: boolean } = {},
+  ): Promise<AIStory> {
+    if (this.provider !== 'anthropic') return this.mock(input);
+    const useSearch = (opts.webSearch ?? false) && this.webSearchAllowed;
+    return this.callAnthropic(input, useSearch);
   }
 
   // ─── Mock ──────────────────────────────────────────────────────────────
-  // Plantilla útil para desarrollar UI sin depender de la API.
   private mock(input: BattleAIInput): AIStory {
     const when = input.year ?? input.startYear ?? '?';
-    const baseSummary = input.wikipediaSummary?.slice(0, 280) ?? '';
+    const base = input.sourceText?.slice(0, 280) ?? '';
     return {
       summary:
         `${input.name} (${when}) — relato breve generado en modo demo. ` +
-        (baseSummary ? `Contexto base: ${baseSummary}` : ''),
-      context:
-        `Contexto estratégico (demo). La batalla tuvo lugar hacia ${when} y ` +
-        `marcó su época.`,
+        (base ? `Contexto base: ${base}` : ''),
+      context: `Contexto estratégico (demo). La batalla tuvo lugar hacia ${when}.`,
       outcome:
-        `Resultado (demo). Cambió la dinámica del frente y reconfiguró las ` +
-        `fuerzas implicadas. Genera tu propia narrativa activando AI_PROVIDER=anthropic.`,
-      curiosities:
-        `Curiosidades (demo). Este texto es una plantilla mock; el provider real ` +
-        `de IA está deshabilitado en este entorno.`,
+        `Resultado (demo). Activa AI_PROVIDER=anthropic para una narrativa real.`,
+      curiosities: `Curiosidades (demo). Plantilla mock; IA real deshabilitada.`,
     };
   }
 
   // ─── Anthropic ─────────────────────────────────────────────────────────
-  // Una sola llamada que devuelve JSON estructurado. Pedimos JSON-only para
-  // evitar parsing frágil, y mantenemos el system prompt fijo + cache.
-  private async callAnthropic(input: BattleAIInput): Promise<AIStory> {
-    const sys = SYSTEM_PROMPT;
+  private async callAnthropic(input: BattleAIInput, useSearch: boolean): Promise<AIStory> {
     const userMsg = buildUserPrompt(input);
-    const res = await this.anthropic!.messages.create({
-      model: this.model,
-      max_tokens: 1200,
-      system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: userMsg }],
-    });
-    const text = res.content
+    try {
+      return await this.callOnce(userMsg, useSearch);
+    } catch (err) {
+      // Si la búsqueda web no está disponible en la cuenta/SDK, reintentamos
+      // sin ella: el artículo completo ya da una buena base.
+      if (useSearch) {
+        this.logger.warn(
+          `Generación con web search falló (${(err as Error).message}); reintento sin búsqueda.`,
+        );
+        return this.callOnce(userMsg, false);
+      }
+      throw err;
+    }
+  }
+
+  private async callOnce(userMsg: string, useSearch: boolean): Promise<AIStory> {
+    const messages: Anthropic.Messages.MessageParam[] = [
+      { role: 'user', content: userMsg },
+    ];
+    let res: Anthropic.Messages.Message | undefined;
+    // La búsqueda web puede devolver `pause_turn`: hay que continuar el turno.
+    for (let i = 0; i < 5; i++) {
+      res = await this.anthropic!.messages.create(this.buildParams(messages, useSearch));
+      if (res.stop_reason !== 'pause_turn') break;
+      messages.push({ role: 'assistant', content: res.content });
+    }
+    const text = (res?.content ?? [])
       .filter((b) => b.type === 'text')
       .map((b) => (b as { text: string }).text)
       .join('\n')
       .trim();
     return parseStoryJson(text);
   }
+
+  private buildParams(
+    messages: Anthropic.Messages.MessageParam[],
+    useSearch: boolean,
+  ): Anthropic.Messages.MessageCreateParamsNonStreaming {
+    const params: Anthropic.Messages.MessageCreateParamsNonStreaming = {
+      model: this.model,
+      max_tokens: 4096,
+      system: [
+        { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+      ],
+      messages,
+    };
+    if (useSearch) {
+      // Herramienta de servidor de Anthropic; el tipado exacto varía entre
+      // versiones del SDK, de ahí el cast.
+      (params as unknown as { tools: unknown[] }).tools = [
+        { type: 'web_search_20250305', name: 'web_search', max_uses: 5 },
+      ];
+    }
+    return params;
+  }
 }
 
-const SYSTEM_PROMPT = `Eres un divulgador histórico riguroso pero accesible. Recibirás
-datos estructurados de una batalla y devolverás SIEMPRE un objeto JSON válido
-con exactamente estas claves: "summary", "context", "outcome", "curiosities".
+const SYSTEM_PROMPT = `Eres un historiador militar y divulgador experto. A partir del
+material de referencia proporcionado y de tu conocimiento (y, si dispones de la
+herramienta de búsqueda web, úsala para verificar datos y añadir detalles
+relevantes de fuentes fiables), redacta una pieza divulgativa RICA, DETALLADA y
+amena sobre la batalla, del tipo por el que un lector pagaría.
+
+Devuelve SIEMPRE un objeto JSON válido con EXACTAMENTE estas claves:
+"summary", "context", "outcome", "curiosities".
+
+Contenido de cada campo (en español, varios párrafos separados por saltos de línea):
+- "summary": el relato de la batalla — cómo se desarrolló, fases, maniobras,
+  momentos decisivos. 250-400 palabras. Que enganche, como una buena crónica.
+- "context": contexto estratégico y geopolítico — qué la provocó, qué estaba en
+  juego, las fuerzas y comandantes enfrentados, planes de cada bando. 200-350 palabras.
+- "outcome": desenlace, bajas y cifras, consecuencias inmediatas y a largo plazo,
+  y por qué es históricamente importante. 200-350 palabras.
+- "curiosities": 3 a 5 anécdotas o datos curiosos CONCRETOS y verificables, cada
+  uno desarrollado en un par de frases.
 
 Reglas:
-- Idioma: español.
-- Tono: divulgativo, cercano, sin ser sensacionalista.
-- Longitud: 100-200 palabras por campo.
-- No inventes nombres, lugares o fechas que no estén en los datos o sean ampliamente conocidos.
-- Si dudas, escribe en condicional. Mejor reconocer incertidumbre que afirmar incorrectamente.
-- No incluyas markdown ni etiquetas, sólo texto plano.
-
-Devuelve SOLO el JSON, sin texto antes ni después, sin code fences.`;
+- Sé específico: nombres propios, cifras, lugares y fechas reales. Nada de
+  generalidades vacías ("fue una batalla importante que cambió la historia").
+- Rigor: no inventes. Si un dato es incierto o se debate, dilo en condicional.
+- Texto plano, sin markdown ni encabezados, sin notas al pie ni citas con corchetes.
+- Devuelve SOLO el JSON, sin texto antes ni después, sin code fences.`;
 
 const TYPE_LABEL: Record<BattleAIInput['type'], string> = {
   BATTLE: 'Batalla',
@@ -118,8 +177,8 @@ function buildUserPrompt(i: BattleAIInput): string {
     i.latitude != null && i.longitude != null
       ? `Ubicación (coordenadas lat, lon): ${i.latitude.toFixed(4)}, ${i.longitude.toFixed(4)}`
       : null,
-    i.wikipediaSummary
-      ? `\nResumen de Wikipedia (referencia, puede tener errores):\n${i.wikipediaSummary}`
+    i.sourceText
+      ? `\nMaterial de referencia (artículo de Wikipedia; puede tener errores u omisiones):\n${i.sourceText}`
       : null,
   ].filter((l): l is string => l != null);
   return lines.join('\n');

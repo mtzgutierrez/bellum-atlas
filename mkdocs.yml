@@ -82,4 +82,6 @@ nav:
       - Entorno local: desarrollo/local.md
       - Docker Compose: desarrollo/docker.md
       - Variables de entorno: desarrollo/env.md
+  - Negocio:
+      - Monetización: negocio/monetizacion.md
   - Roadmap: roadmap.md

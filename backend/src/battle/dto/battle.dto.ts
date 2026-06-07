@@ -125,7 +125,8 @@ export class BattleAIStoryDto {
 }
 
 export class BattleAIStoryPendingDto {
-  @ApiProperty({ default: 'pending' }) status!: 'pending';
+  @ApiProperty({ enum: ['pending', 'unavailable'] })
+  status!: 'pending' | 'unavailable';
   @ApiProperty({ description: 'Posición aproximada en cola, si conocida' })
   queuePosition?: number;
 }

@@ -8,7 +8,6 @@ import TypeIcon from '../components/TypeIcon'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { aiService } from '../services/ai.service'
 import type { AIStoryState } from '../services/ai.types'
-import { authService } from '../services/auth.service'
 import { battleService } from '../services/battle.service'
 import type { BattleDetail } from '../services/battle.types'
 import { formatBattleDates } from '../utils/dates'
@@ -165,7 +164,9 @@ function RelatedBattles({ battle }: { battle: BattleDetail }) {
   )
 }
 
-// ── Narrativa de IA (Premium) ────────────────────────────────────────────────
+// ── Narrativa de IA ───────────────────────────────────────────────────────
+// Abierta a todos (free + ads). No se genera a demanda: si no existe, se
+// muestra un aviso. El contenido lo pre-genera el equipo (pregen + job diario).
 
 const AI_TABS = [
   { key: 'summary', label: 'Story Mode' },
@@ -196,56 +197,15 @@ function AiStorySection({ slug }: { slug: string }) {
     void load()
   }, [load])
 
-  const becomePremium = async () => {
-    await authService.loginDev('premium')
-    await load()
-  }
+  // Si no hay narrativa aún, ni siquiera mostramos la sección (no hay nada que
+  // ofrecer y no se puede pedir su generación).
+  if (!loading && (!state || state.kind !== 'ready')) return null
 
   return (
     <section className="detail-section">
-      <h2 className="detail-section-title">
-        Narrativa por IA{' '}
-        <span
-          className="font-mono"
-          style={{
-            fontSize: 11,
-            color: 'var(--color-gold, #b8860b)',
-            letterSpacing: '0.1em',
-            marginLeft: 8,
-          }}
-        >
-          PREMIUM
-        </span>
-      </h2>
+      <h2 className="detail-section-title">Narrativa por IA</h2>
 
       {loading && !state && <div className="skeleton" style={{ height: 160 }} />}
-
-      {(state?.kind === 'unauthorized' || state?.kind === 'forbidden') && (
-        <PremiumTeaser onUnlock={becomePremium} />
-      )}
-
-      {state?.kind === 'pending' && (
-        <div
-          style={{
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-surface)',
-            padding: 24,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16,
-            alignItems: 'flex-start',
-          }}
-        >
-          <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
-            Narrativa generándose en segundo plano… Se precomputa con un worker y
-            se cachea de forma permanente. Vuelve en unos segundos.
-            {state.queuePosition != null ? ` (en cola: ${state.queuePosition})` : ''}
-          </p>
-          <button className="btn btn-primary" onClick={load}>
-            Actualizar
-          </button>
-        </div>
-      )}
 
       {state?.kind === 'ready' && (
         <div>
@@ -283,59 +243,6 @@ function AiStorySection({ slug }: { slug: string }) {
           </div>
         </div>
       )}
-
-      {!loading && !state && (
-        <button className="btn btn-ghost" onClick={load}>
-          Reintentar
-        </button>
-      )}
     </section>
-  )
-}
-
-// Teaser atractivo para invitados / free: enumera lo que desbloquea.
-function PremiumTeaser({ onUnlock }: { onUnlock: () => void }) {
-  return (
-    <div
-      style={{
-        border: '1px solid var(--color-gold, #b8860b)',
-        background:
-          'linear-gradient(135deg, color-mix(in srgb, var(--color-gold, #b8860b) 8%, transparent), var(--color-surface))',
-        padding: 28,
-      }}
-    >
-      <p style={{ marginTop: 0, color: 'var(--color-text-primary)', fontSize: 16 }}>
-        Desbloquea la <strong>narrativa generada por IA</strong> de esta batalla:
-      </p>
-      <ul
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: '8px 24px',
-          listStyle: 'none',
-          padding: 0,
-          margin: '0 0 20px',
-        }}
-      >
-        {[
-          ['Story Mode', 'El relato de la batalla, contado como una historia.'],
-          ['Contexto estratégico', 'Por qué ocurrió y qué estaba en juego.'],
-          ['Resultado', 'Consecuencias y cómo cambió el rumbo.'],
-          ['Curiosidades', 'Anécdotas y datos que no esperas.'],
-        ].map(([t, d]) => (
-          <li key={t} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <Icon name="star" size={14} color="var(--color-gold, #b8860b)" />
-            <span>
-              <strong>{t}</strong>
-              <br />
-              <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{d}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
-      <button className="btn btn-primary" onClick={onUnlock}>
-        Activar Premium (demo)
-      </button>
-    </div>
   )
 }

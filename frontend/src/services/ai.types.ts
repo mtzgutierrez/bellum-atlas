@@ -10,7 +10,7 @@ export interface AIStory {
 }
 
 export interface AIStoryPending {
-  status: 'pending'
+  status: 'pending' | 'unavailable'
   queuePosition?: number
 }
 
@@ -18,5 +18,6 @@ export interface AIStoryPending {
 export type AIStoryState =
   | { kind: 'ready'; story: AIStory }
   | { kind: 'pending'; queuePosition?: number }
+  | { kind: 'unavailable' } // aún no pre-generada (a-demanda bloqueado)
   | { kind: 'forbidden' } // requiere premium
   | { kind: 'unauthorized' } // requiere login

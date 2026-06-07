@@ -11,9 +11,10 @@ export const aiService = {
       const { status, data } = await getWithStatus<AIStory | AIStoryPending>(
         `/battles/${encodeURIComponent(idOrSlug)}/ai-story`,
       )
-      if (status === 202 || (data as AIStoryPending).status === 'pending') {
-        const pending = data as AIStoryPending
-        return { kind: 'pending', queuePosition: pending.queuePosition }
+      const st = (data as AIStoryPending).status
+      if (st === 'unavailable') return { kind: 'unavailable' }
+      if (status === 202 || st === 'pending') {
+        return { kind: 'pending', queuePosition: (data as AIStoryPending).queuePosition }
       }
       return { kind: 'ready', story: data as AIStory }
     } catch (err) {

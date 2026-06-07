@@ -5,12 +5,13 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AI_QUEUE_NAME, BattleAIInput, GenerateAIJobData } from './ai.types';
 import { LlmService } from './llm.service';
+import { fetchArticleText } from './wikipedia-source';
 
 // Worker BullMQ. Una sola responsabilidad: recibir un battleId, recoger su
 // contexto, generar la historia con el LLM y persistir BattleAISummary.
 // Idempotente: si ya existe summary, lo respeta (un re-encolado no
 // sobreescribe accidentalmente cuando ya pagamos por la generación).
-@Processor(AI_QUEUE_NAME, { concurrency: 2 })
+@Processor(AI_QUEUE_NAME, { concurrency: 4 })
 export class AiProcessor extends WorkerHost {
   private readonly logger = new Logger(AiProcessor.name);
 
@@ -22,7 +23,7 @@ export class AiProcessor extends WorkerHost {
   }
 
   async process(job: Job<GenerateAIJobData>): Promise<void> {
-    const { battleId } = job.data;
+    const { battleId, webSearch = false } = job.data;
 
     const existing = await this.prisma.battleAISummary.findUnique({
       where: { battleId },
@@ -41,6 +42,10 @@ export class AiProcessor extends WorkerHost {
       return;
     }
 
+    // Material de referencia: el artículo completo de Wikipedia; si no se puede
+    // obtener, caemos al extract corto guardado en la BD.
+    const article = await fetchArticleText(battle.wikipediaUrl);
+
     const input: BattleAIInput = {
       name: battle.name,
       year: battle.year,
@@ -52,11 +57,12 @@ export class AiProcessor extends WorkerHost {
       type: battle.type,
       latitude: battle.latitude,
       longitude: battle.longitude,
-      wikipediaSummary: battle.summary,
+      sourceText: article ?? battle.summary,
     };
 
-    const story = await this.llm.generate(input);
+    const story = await this.llm.generate(input, { webSearch });
     const promptHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
+    const usedWebSearch = webSearch && this.llm.isReal();
 
     await this.prisma.battleAISummary.create({
       data: {
@@ -67,9 +73,12 @@ export class AiProcessor extends WorkerHost {
         curiosities: story.curiosities,
         modelUsed: this.llm.modelId(),
         promptHash,
+        usedWebSearch,
       },
     });
 
-    this.logger.log(`✓ Historia IA generada para "${battle.name}" (${battleId})`);
+    this.logger.log(
+      `✓ Historia IA generada para "${battle.name}" (${battleId})${usedWebSearch ? ' [web]' : ''}`,
+    );
   }
 }

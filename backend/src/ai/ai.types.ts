@@ -24,13 +24,18 @@ export interface BattleAIInput {
   type: 'BATTLE' | 'SIEGE' | 'CAMPAIGN';
   latitude: number | null;
   longitude: number | null;
-  wikipediaSummary: string | null;
+  // Material de referencia: el artículo completo de Wikipedia (o el extract
+  // corto como fallback).
+  sourceText: string | null;
 }
 
-// Payload del job de la cola BullMQ. Sólo id; el worker re-lee la BD.
+// Payload del job de la cola BullMQ. Sólo id + tier; el worker re-lee la BD.
 export interface GenerateAIJobData {
   battleId: string;
-  reason: 'auto-ingest' | 'on-demand-request';
+  reason: 'auto-ingest' | 'on-demand-request' | 'daily-enrichment';
+  // true = generar con búsqueda web (tier rico); false/omitido = básica.
+  webSearch?: boolean;
 }
 
 export const AI_QUEUE_NAME = 'ai-generation';
+export const AI_DAILY_QUEUE_NAME = 'ai-daily';
