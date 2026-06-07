@@ -50,8 +50,6 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION: ${JWT_EXPIRATION}
       AI_PROVIDER: ${AI_PROVIDER:-mock}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-claude-sonnet-4-6}

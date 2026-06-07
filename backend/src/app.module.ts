@@ -4,7 +4,6 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { join } from 'path';
 import { AiModule } from './ai/ai.module';
-import { AuthModule } from './auth/auth.module';
 import { BattleModule } from './battle/battle.module';
 import { HealthController } from './health/health.controller';
 import { IngestionModule } from './ingestion/ingestion.module';
@@ -20,7 +19,6 @@ import { PrismaModule } from './prisma/prisma.module';
     // del mapa y la narrativa de IA (abierta a todos).
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     PrismaModule,
-    AuthModule,
     BattleModule,
     AiModule,
     IngestionModule,

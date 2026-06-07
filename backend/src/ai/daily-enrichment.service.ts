@@ -1,77 +1,73 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiQueueService } from './ai-queue.service';
 
-// Enriquecimiento incremental diario. Con un presupuesto pequeño (por defecto
-// 15 batallas/día) sube narrativas a tier "web search", priorizando:
-//   1. las efemérides de hoy (lo que sale en portada) que aún no sean web,
-//   2. y, con el cupo restante, el backlog de batallas en básica por importancia.
-// Así la calidad crece sin gastar un dineral de golpe.
+// Construcción diaria de narrativa "premium" (completa, SIEMPRE con búsqueda web
+// activada). Se genera como mucho UNA batalla al día, eligiéndola por prioridad:
+//   1. La efeméride de hoy más importante que aún no tenga narrativa
+//      (si la #1 ya la tiene, la #2, y así sucesivamente).
+//   2. Si todas las efemérides de hoy ya la tienen (o no hay batallas de hoy),
+//      la batalla más importante del catálogo global que aún no la tenga.
 @Injectable()
 export class DailyEnrichmentService {
   private readonly logger = new Logger(DailyEnrichmentService.name);
-  private readonly budget: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly queue: AiQueueService,
-    config: ConfigService,
-  ) {
-    this.budget = Number(config.get<string>('AI_DAILY_WEB_BUDGET') ?? 15);
-  }
+  ) {}
 
   async run(): Promise<void> {
-    let remaining = this.budget;
-    this.logger.log(`Enriquecimiento diario: presupuesto ${remaining}.`);
-
-    // ── 1. Efemérides de hoy que aún no son "web" ──────────────────────────
-    const now = new Date();
-    const mmdd = `-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-    const efem = await this.prisma.battle.findMany({
-      where: { OR: [{ date: { endsWith: mmdd } }, { startDate: { endsWith: mmdd } }] },
-      orderBy: { importanceScore: 'desc' },
-      take: 50,
-      select: { id: true, name: true, aiSummary: { select: { usedWebSearch: true } } },
-    });
-    for (const b of efem) {
-      if (remaining <= 0) break;
-      if (b.aiSummary?.usedWebSearch) continue; // ya es web
-      await this.upgrade(b.id, b.name);
-      remaining -= 1;
+    const target = await this.pickTarget();
+    if (!target) {
+      this.logger.log(
+        'Generación diaria: todas las batallas ya tienen narrativa. Nada que hacer.',
+      );
+      return;
     }
-
-    // ── 2. Backlog: batallas en básica, por importancia ────────────────────
-    if (remaining > 0) {
-      const basics = await this.prisma.battle.findMany({
-        where: { aiSummary: { is: { usedWebSearch: false } } },
-        orderBy: { importanceScore: 'desc' },
-        take: remaining,
-        select: { id: true, name: true },
-      });
-      for (const b of basics) {
-        if (remaining <= 0) break;
-        await this.upgrade(b.id, b.name);
-        remaining -= 1;
-      }
-    }
-
-    this.logger.log(
-      `Enriquecimiento diario: encoladas ${this.budget - remaining} batallas a tier web.`,
-    );
-  }
-
-  // Borra la narrativa actual (el worker salta si ya existe) y re-encola con web.
-  private async upgrade(battleId: string, name: string): Promise<void> {
-    await this.prisma.battleAISummary
-      .delete({ where: { battleId } })
-      .catch(() => undefined);
+    // webSearch SIEMPRE: narrativa completa con fuentes externas.
     await this.queue.enqueue({
-      battleId,
+      battleId: target.id,
       reason: 'daily-enrichment',
       webSearch: true,
     });
-    this.logger.log(`↑ web: ${name}`);
+    this.logger.log(
+      `Generación diaria [${target.source}]: "${target.name}" (importancia ${target.importanceScore}).`,
+    );
+  }
+
+  // Elige la batalla del día según la prioridad efeméride → global.
+  async pickTarget(): Promise<{
+    id: string;
+    name: string;
+    importanceScore: number;
+    source: 'efeméride de hoy' | 'top global';
+  } | null> {
+    const now = new Date();
+    const mmdd = `-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+
+    // 1 + 2: la efeméride de hoy MÁS importante que aún NO tenga narrativa.
+    // `aiSummary is null` salta automáticamente las que ya están generadas, así
+    // que findFirst por importancia descendente da exactamente la siguiente.
+    const efem = await this.prisma.battle.findFirst({
+      where: {
+        aiSummary: { is: null },
+        OR: [{ date: { endsWith: mmdd } }, { startDate: { endsWith: mmdd } }],
+      },
+      orderBy: { importanceScore: 'desc' },
+      select: { id: true, name: true, importanceScore: true },
+    });
+    if (efem) return { ...efem, source: 'efeméride de hoy' };
+
+    // 3: la batalla MÁS importante del catálogo global que aún no tenga narrativa.
+    const global = await this.prisma.battle.findFirst({
+      where: { aiSummary: { is: null } },
+      orderBy: { importanceScore: 'desc' },
+      select: { id: true, name: true, importanceScore: true },
+    });
+    if (global) return { ...global, source: 'top global' };
+
+    return null;
   }
 }
 

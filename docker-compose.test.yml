@@ -1,0 +1,35 @@
+# Base de datos efímera para pruebas de integración.
+#
+# Levanta SOLO PostgreSQL (sin backend, frontend ni Redis): las pruebas de
+# integración apuntan a esta BD real para ser lo más fieles posible a producción
+# (consultas Prisma reales, índices, tipos, transacciones), en vez de mockear el
+# repositorio.
+#
+# Uso:
+#   docker compose -f docker-compose.test.yml up -d        # arranca la BD
+#   cd backend && DATABASE_URL=postgresql://test:test@localhost:5433/ares_test?schema=public \
+#     npx prisma migrate deploy && npm run test:e2e
+#   docker compose -f docker-compose.test.yml down -v       # la borra
+#
+# Notas:
+# - Puerto 5433 en el host para no chocar con la BD de desarrollo (5432).
+# - Datos en tmpfs (RAM): arranque rápido y nada que limpiar entre ejecuciones.
+# - Credenciales fijas y triviales a propósito: es una BD desechable de test.
+services:
+  postgres-test:
+    image: postgres:18.1-alpine
+    container_name: ares_codex_test_postgres
+    environment:
+      POSTGRES_DB: ares_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+    ports:
+      - "5433:5432"
+    # Datos en RAM: la BD es efímera, se recrea en cada arranque.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d ares_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 10

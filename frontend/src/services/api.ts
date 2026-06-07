@@ -3,28 +3,6 @@
 
 const BASE = '/api'
 
-// El token JWT (tier free/premium) se guarda en localStorage y se adjunta a
-// todas las peticiones. Hoy ninguna ruta lo exige (la narrativa de IA es
-// abierta); el backend solo lo lee si está presente.
-const TOKEN_KEY = 'ares.token'
-
-export function getToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY)
-  } catch {
-    return null
-  }
-}
-
-export function setToken(token: string | null): void {
-  try {
-    if (token) localStorage.setItem(TOKEN_KEY, token)
-    else localStorage.removeItem(TOKEN_KEY)
-  } catch {
-    /* localStorage no disponible: no-op */
-  }
-}
-
 export interface PaginationMeta {
   total: number
   page: number
@@ -42,8 +20,8 @@ export interface PaginationQuery {
   pageSize?: number
 }
 
-// Error con el status HTTP accesible, para distinguir 202 (pending), 401/403
-// (auth) etc. en las pantallas.
+// Error con el status HTTP accesible, para distinguir 202 (pending) y demás
+// códigos en las pantallas.
 export class ApiError extends Error {
   readonly status: number
   constructor(status: number, message: string) {
@@ -59,12 +37,10 @@ async function request<T>(
 ): Promise<T> {
   const url = `${BASE}${path}`
   const { json, ...rest } = init ?? {}
-  const token = getToken()
   const res = await fetch(url, {
     ...rest,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(rest.headers ?? {}),
     },
     body: json !== undefined ? JSON.stringify(json) : rest.body,
@@ -89,11 +65,9 @@ export function post<T>(path: string, body: unknown): Promise<T> {
 export async function getWithStatus<T>(
   path: string,
 ): Promise<{ status: number; data: T }> {
-  const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   })
   if (!res.ok) {

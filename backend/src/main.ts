@@ -14,7 +14,6 @@ async function bootstrap() {
         'devuelve el contenido pre-generado o `unavailable` si aún no existe.',
     )
     .setVersion('1.0')
-    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
