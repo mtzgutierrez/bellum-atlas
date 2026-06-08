@@ -16,7 +16,7 @@ así que los datos **sobreviven** a:
 Pero se **PIERDEN IRRECUPERABLEMENTE** con:
 
 - `docker compose down -v` (la `-v` borra los volúmenes).
-- `docker volume rm ares_codex_app_postgres_data`.
+- `docker volume rm bellum_atlas_postgres_data`.
 - `prisma migrate reset` (re-aplica `atlas_reset`, que hace `DROP TABLE`).
 - Cualquier `migrate dev` que detecte "drift" y proponga resetear.
 
@@ -27,7 +27,7 @@ volumen**.
 
 ```sh
 cd backend
-./scripts/db-backup.sh            # → <repo>/backups/arescodex_<timestamp>.dump
+./scripts/db-backup.sh            # → <repo>/backups/bellumatlas_<timestamp>.dump
 KEEP=60 ./scripts/db-backup.sh    # conserva las últimas 60 (por defecto 30)
 ```
 
@@ -42,7 +42,7 @@ KEEP=60 ./scripts/db-backup.sh    # conserva las últimas 60 (por defecto 30)
 ```sh
 cd backend
 ./scripts/db-restore.sh                                  # el backup más reciente
-./scripts/db-restore.sh ../backups/arescodex_<ts>.dump   # uno concreto
+./scripts/db-restore.sh ../backups/bellumatlas_<ts>.dump   # uno concreto
 FORCE=1 ./scripts/db-restore.sh <file>                   # sin confirmación
 ```
 
@@ -52,7 +52,7 @@ actual por el del dump. Pide confirmación salvo `FORCE=1`.
 ## Comprobar un dump sin restaurar
 
 ```sh
-cat backups/arescodex_<ts>.dump | docker exec -i ares_codex_app_postgres pg_restore -l | grep -i battle
+cat backups/bellumatlas_<ts>.dump | docker exec -i bellum_atlas-postgres-1 pg_restore -l | grep -i battle
 ```
 
 Debe listar `TABLE DATA public battle_ai_summaries` y `battles`.
@@ -63,7 +63,7 @@ Debe listar `TABLE DATA public battle_ai_summaries` y `battles`.
 host, p. ej. diario a las 3:00:
 
 ```cron
-0 3 * * * cd /home/raul/Workspaces/ares-codex/backend && ./scripts/db-backup.sh >> /tmp/arescodex-backup.log 2>&1
+0 3 * * * cd /home/raul/Workspaces/bellum-atlas/backend && ./scripts/db-backup.sh >> /tmp/bellumatlas-backup.log 2>&1
 ```
 
 ## Regla de oro

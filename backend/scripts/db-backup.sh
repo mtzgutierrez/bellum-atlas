@@ -9,12 +9,12 @@
 # esta máquina.
 #
 # Uso:
-#   ./scripts/db-backup.sh                 # crea backups/arescodex_<ts>.dump
+#   ./scripts/db-backup.sh                 # crea backups/bellumatlas_<ts>.dump
 #   KEEP=60 ./scripts/db-backup.sh         # conserva las últimas 60 (def. 30)
 #   BACKUP_DIR=/ruta ./scripts/db-backup.sh
 set -e
 
-CONTAINER="${POSTGRES_CONTAINER:-ares_codex_app_postgres}"
+CONTAINER="${POSTGRES_CONTAINER:-bellum_atlas-postgres-1}"
 # Dir de backups: por defecto <repo>/backups (este script vive en backend/scripts).
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
@@ -28,7 +28,7 @@ fi
 
 mkdir -p "$BACKUP_DIR"
 TS=$(date +%Y%m%d_%H%M%S)
-OUT="$BACKUP_DIR/arescodex_${TS}.dump"
+OUT="$BACKUP_DIR/bellumatlas_${TS}.dump"
 
 echo "Volcando $CONTAINER → $OUT …"
 # pg_dump dentro del contenedor; el stream se escribe en el host.
@@ -45,9 +45,9 @@ echo "✓ Backup OK: $OUT (${SIZE} bytes)"
 
 # Rotación: conserva las KEEP más recientes, borra el resto.
 # shellcheck disable=SC2012
-COUNT=$(ls -1 "$BACKUP_DIR"/arescodex_*.dump 2>/dev/null | wc -l | tr -d ' ')
+COUNT=$(ls -1 "$BACKUP_DIR"/bellumatlas_*.dump 2>/dev/null | wc -l | tr -d ' ')
 if [ "$COUNT" -gt "$KEEP" ]; then
-  ls -1t "$BACKUP_DIR"/arescodex_*.dump | tail -n +"$((KEEP + 1))" | while read -r old; do
+  ls -1t "$BACKUP_DIR"/bellumatlas_*.dump | tail -n +"$((KEEP + 1))" | while read -r old; do
     echo "  rotación: elimino $old"
     rm -f "$old"
   done

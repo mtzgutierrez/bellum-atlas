@@ -15,7 +15,7 @@ import { PrismaService } from './prisma/prisma.service';
 //   npm run backfill:articles                 # top 200, 400ms entre peticiones
 //   npm run backfill:articles -- 500          # top 500
 //   DELAY_MS=700 npm run backfill:articles -- 300
-//   docker exec ares_codex_app_backend npm run backfill:articles -- 200
+//   docker exec bellum_atlas-backend-1 npm run backfill:articles -- 200
 // =============================================================================
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

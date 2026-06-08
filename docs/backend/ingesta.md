@@ -82,7 +82,7 @@ Ambos traen los mismos campos por batalla (datos + imagen + resumen de Wikipedia
 O directamente con npm dentro del contenedor:
 
 ```bash
-docker exec ares_codex_app_backend npm run ingest -- battle:Q165425
+docker exec bellum_atlas-backend-1 npm run ingest -- battle:Q165425
 ```
 
 ### Variables de entorno (modo bulk)

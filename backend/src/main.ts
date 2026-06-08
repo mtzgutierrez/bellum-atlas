@@ -7,7 +7,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const config = new DocumentBuilder()
-    .setTitle('AresCodex API')
+    .setTitle('Bellum Atlas API')
     .setDescription(
       'Atlas histórico interactivo de conflictos militares.\n\n' +
         'La narrativa por IA (`GET /battles/:id/ai-story`) es abierta a todos: ' +

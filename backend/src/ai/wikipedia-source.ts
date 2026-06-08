@@ -5,7 +5,7 @@
 // Wikimedia exige un User-Agent descriptivo con contacto; uno genérico se
 // arriesga a HTTP 429 / bloqueo. Ver https://meta.wikimedia.org/wiki/User-Agent_policy
 const USER_AGENT =
-  'AresCodex/1.0 (Historical battles atlas; raulmartinezz402@gmail.com)';
+  'BellumAtlas/1.0 (Historical battles atlas; raulmartinezz402@gmail.com)';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

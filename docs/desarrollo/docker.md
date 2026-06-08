@@ -61,14 +61,14 @@ docker compose $CF stop
 docker compose $CF down -v
 
 # Conectarse a PostgreSQL (usuario/BD por defecto del .env)
-docker exec -it ares_codex_app_postgres psql -U ares_user -d ares_db
+docker exec -it bellum_atlas-postgres-1 psql -U bellum_user -d bellum_db
 
 # Conectarse a Redis
-docker exec -it ares_codex_app_redis redis-cli
+docker exec -it bellum_atlas-redis-1 redis-cli
 
 # Poblar la BD
-docker exec ares_codex_app_backend npm run seed
-docker exec ares_codex_app_backend npm run ingest -- battle:Q165425
+docker exec bellum_atlas-backend-1 npm run seed
+docker exec bellum_atlas-backend-1 npm run ingest -- battle:Q165425
 ```
 
 ---
@@ -76,7 +76,7 @@ docker exec ares_codex_app_backend npm run ingest -- battle:Q165425
 ## Persistencia de datos
 
 PostgreSQL y Redis persisten en volúmenes Docker nombrados
-(`ares_codex_app_postgres_data`, `ares_codex_app_redis_data`), por lo que
+(`bellum_atlas_postgres_data`, `bellum_atlas_redis_data`), por lo que
 sobreviven a `stop`. Solo se borran con `down -v`.
 
 ---

@@ -7,7 +7,7 @@
 #   ./scripts/seed.sh
 set -e
 
-CONTAINER="${BACKEND_CONTAINER:-ares_codex_app_backend}"
+CONTAINER="${BACKEND_CONTAINER:-bellum_atlas-backend-1}"
 
 # shellcheck disable=SC2086
 exec docker exec "$CONTAINER" npm run seed

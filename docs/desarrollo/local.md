@@ -16,8 +16,8 @@ docs). No necesitas Node ni Python instalados en el host.
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/tu-usuario/ares-codex.git
-cd ares-codex
+git clone https://github.com/tu-usuario/bellum-atlas.git
+cd bellum-atlas
 ```
 
 ### 2. Crear el `.env`
@@ -69,7 +69,7 @@ Dos opciones (ver detalle en [Ingesta](../backend/ingesta.md)):
 TOP_LIMIT=100 ./backend/scripts/ingest.sh top-battles
 ```
 
-(Equivalen a `docker exec ares_codex_app_backend npm run seed` / `npm run ingest -- ...`.)
+(Equivalen a `docker exec bellum_atlas-backend-1 npm run seed` / `npm run ingest -- ...`.)
 
 ---
 
@@ -100,7 +100,7 @@ curl -X POST http://localhost:3000/auth/dev-token \
 
 ```bash
 # Ver logs del backend
-docker logs -f ares_codex_app_backend
+docker logs -f bellum_atlas-backend-1
 
 # Reiniciar solo el backend (p.ej. tras cambiar el .env)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --force-recreate backend

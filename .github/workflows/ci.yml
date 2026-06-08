@@ -9,52 +9,196 @@ on:
 permissions:
   contents: read
   checks: write
+  security-events: write # para subir SARIF (CodeQL / Trivy) a la pestaña Security
 
-# Cancel in-flight runs for the same PR or branch when a new commit arrives.
-# Groups by PR number (for pull_request events) or branch name (for push events).
+# Cancela ejecuciones en vuelo de la misma PR o rama cuando llega un commit nuevo.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Tests unitarios (totalmente mockeados — sin BD real).
+  # ───────────────────────────────────────────────────────────────────────────
   test-backend:
-    name: Backend Tests
+    name: Backend · Unit
     runs-on: ubuntu-latest
-
-    # Apply working-directory to every step so we don't repeat it.
     defaults:
       run:
         working-directory: backend
-
-    # Unit tests are fully mocked — no real DB is needed.
-    # DATABASE_URL must still be set because:
-    #   • prisma generate reads prisma.config.ts which references it.
-    #   • PrismaService constructor builds a pg.Pool from it (lazy — never connects).
+    # DATABASE_URL debe existir aunque no se conecte: prisma.config.ts lo lee y el
+    # constructor de PrismaService crea un pg.Pool (lazy, nunca conecta en unit).
     env:
       DATABASE_URL: postgresql://ci_user:ci_pass@localhost:5432/ci_db
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm test -- --ci
 
-      - name: Install dependencies
+  # ───────────────────────────────────────────────────────────────────────────
+  # Tests de integración contra una PostgreSQL REAL (service container = el
+  # equivalente en CI a docker-compose.test.yml).
+  # ───────────────────────────────────────────────────────────────────────────
+  e2e-backend:
+    name: Backend · E2E (Postgres real)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:18.1-alpine
+        env:
+          POSTGRES_DB: bellum_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d bellum_test"
+          --health-interval 3s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5433/bellum_test?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy # esquema + triggers reales
+      - run: npm run test:e2e -- --ci
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Gate de BUILD previo a deploy: garantiza que TODO compila sin errores
+  # (typecheck real, no solo swc) y que el artefacto de despliegue (imagen de
+  # producción) arranca y responde /health. Cubre el bug D-1 (entrypoint).
+  # ───────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build · Deploy gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      # Backend: typecheck real (nest build usa swc con typeCheck:false) + build.
+      - name: Backend · install
+        working-directory: backend
         run: npm ci
-
-      # Generate @prisma/client types from schema.prisma.
-      # Tests import MediaSource, Prisma.PrismaClientKnownRequestError, etc.
-      # from @prisma/client, so this step must run before the test step.
-      - name: Generate Prisma client
+      - name: Backend · prisma generate
+        working-directory: backend
         run: npx prisma generate
+      - name: Backend · typecheck
+        working-directory: backend
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Backend · build
+        working-directory: backend
+        run: npm run build
 
-      # --ci     → non-interactive mode, deterministic output, fails on new snapshots
-      # --forceExit → prevents Jest from hanging due to the pg.Pool open handle
-      #              created by PrismaService (even without an active connection)
-      - name: Run unit tests
-        run: npm test -- --ci --forceExit
+      # Frontend: `npm run build` ya hace `tsc -b && vite build`.
+      - name: Frontend · install
+        working-directory: frontend
+        run: npm ci
+      - name: Frontend · build
+        working-directory: frontend
+        run: npm run build
+
+      # Smoke del artefacto de deploy: levanta las imágenes de PRODUCCIÓN con
+      # compose y comprueba que el backend arranca y responde /health. Si el
+      # entrypoint es incorrecto o el contenedor crashea, esto falla.
+      - name: Prod images · smoke /health
+        run: |
+          cat > .env <<'EOF'
+          NODE_ENV=production
+          BUILD_TARGET=production
+          COMPOSE_PROJECT_NAME=bellum_ci
+          POSTGRES_DB=bellum
+          POSTGRES_USER=bellum
+          POSTGRES_PASSWORD=bellum
+          POSTGRES_PORT=5432
+          POSTGRES_HOST=postgres
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          AI_PROVIDER=mock
+          VITE_API_URL=http://localhost:3000
+          FRONTEND_PORT=5173
+          EOF
+          docker compose up -d --build postgres redis backend
+          echo "Esperando a /health…"
+          for i in $(seq 1 40); do
+            if docker compose exec -T backend wget -qO- http://localhost:3000/health | grep -q '"status":"ok"'; then
+              echo "✓ backend healthy"; ok=1; break
+            fi
+            sleep 3
+          done
+          if [ -z "$ok" ]; then
+            echo "✗ el backend de producción no respondió /health"; docker compose logs backend; exit 1
+          fi
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Seguridad estática y determinista (gate de PR).
+  # ───────────────────────────────────────────────────────────────────────────
+  security:
+    name: Security · scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks necesita el histórico
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Dependencias: falla en alto/crítico (moderate solo informa por ahora).
+      - name: Audit · backend
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit · frontend
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+      # Secret scanning.
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # SAST de JS/TS → pestaña Security.
+      - name: CodeQL · init
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - name: CodeQL · analyze
+        uses: github/codeql-action/analyze@v3
+
+      # Vulnerabilidades de deps + IaC/Dockerfile → SARIF.
+      - name: Trivy · filesystem
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          format: sarif
+          output: trivy.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+      - name: Trivy · upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif

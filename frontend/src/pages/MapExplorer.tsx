@@ -220,7 +220,7 @@ export default function MapExplorer() {
       zIndexOffset: 1000,
     })
       .bindPopup(buildPopup(point), {
-        className: 'ares-popup',
+        className: 'bellum-popup',
         maxWidth: 260,
         minWidth: 200,
       })
@@ -477,7 +477,7 @@ function addBattleMarker(
     iconAnchor: [9, 9],
   })
   const marker = L.marker([b.latitude, b.longitude], { icon })
-    .bindPopup(buildPopup(b), { className: 'ares-popup', maxWidth: 260, minWidth: 200 })
+    .bindPopup(buildPopup(b), { className: 'bellum-popup', maxWidth: 260, minWidth: 200 })
     .on('click', () => setSelectedId(b.id))
     .on('popupopen', (e) => bindPopupNavigation(e.popup, b.slug, navigate))
   marker.addTo(layer)

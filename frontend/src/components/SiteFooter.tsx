@@ -48,7 +48,7 @@ export default function SiteFooter() {
       </div>
 
       <div className="site-footer-bottom">
-        <span>© {year} Ares Codex</span>
+        <span>© {year} Bellum Atlas</span>
         <span className="dot">·</span>
         <Link to="/about">Acerca de</Link>
         <span className="dot">·</span>

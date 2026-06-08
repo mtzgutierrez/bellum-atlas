@@ -15,7 +15,7 @@
 #   import: IN, AI_BATCH_MODEL
 set -e
 
-CONTAINER="${BACKEND_CONTAINER:-ares_codex_app_backend}"
+CONTAINER="${BACKEND_CONTAINER:-bellum_atlas-backend-1}"
 CMD="${1:-}"
 shift 2>/dev/null || true
 

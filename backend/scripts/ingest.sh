@@ -9,7 +9,7 @@
 #   MAX_PAGES=0 ./scripts/ingest.sh all-battles        # todas (sin límite)
 set -e
 
-CONTAINER="${BACKEND_CONTAINER:-ares_codex_app_backend}"
+CONTAINER="${BACKEND_CONTAINER:-bellum_atlas-backend-1}"
 
 # Propaga variables de entorno opcionales de la ingesta bulk al contenedor.
 ENV_FLAGS=""

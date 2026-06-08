@@ -3,12 +3,12 @@
 # DESTRUCTIVO: reemplaza el contenido actual por el del dump (--clean).
 #
 # Uso:
-#   ./scripts/db-restore.sh backups/arescodex_20260607_120000.dump
+#   ./scripts/db-restore.sh backups/bellumatlas_20260607_120000.dump
 #   ./scripts/db-restore.sh                 # usa el backup más reciente
 #   FORCE=1 ./scripts/db-restore.sh <file>  # sin confirmación interactiva
 set -e
 
-CONTAINER="${POSTGRES_CONTAINER:-ares_codex_app_postgres}"
+CONTAINER="${POSTGRES_CONTAINER:-bellum_atlas-postgres-1}"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 BACKUP_DIR="${BACKUP_DIR:-$REPO_ROOT/backups}"
@@ -16,7 +16,7 @@ BACKUP_DIR="${BACKUP_DIR:-$REPO_ROOT/backups}"
 FILE="$1"
 if [ -z "$FILE" ]; then
   # shellcheck disable=SC2012
-  FILE=$(ls -1t "$BACKUP_DIR"/arescodex_*.dump 2>/dev/null | head -n1 || true)
+  FILE=$(ls -1t "$BACKUP_DIR"/bellumatlas_*.dump 2>/dev/null | head -n1 || true)
   [ -n "$FILE" ] && echo "Sin argumento: uso el más reciente → $FILE"
 fi
 

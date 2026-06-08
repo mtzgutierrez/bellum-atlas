@@ -1,6 +1,6 @@
 # IA — Narrativas generadas por LLM
 
-AresCodex enriquece las batallas con narrativas generadas por un modelo de
+Bellum Atlas enriquece las batallas con narrativas generadas por un modelo de
 lenguaje (LLM): un **Story Mode**, el **contexto estratégico**, el **resultado**
 y **curiosidades**. Esta es la funcionalidad **Premium** de la aplicación.
 

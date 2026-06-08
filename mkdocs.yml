@@ -1,9 +1,9 @@
-site_name: AresCodex Docs
+site_name: Bellum Atlas Docs
 site_description: Atlas histórico interactivo de conflictos militares
-site_author: AresCodex Team
+site_author: Bellum Atlas Team
 docs_dir: docs
-repo_url: https://github.com/tu-usuario/ares-codex
-repo_name: ares-codex
+repo_url: https://github.com/tu-usuario/bellum-atlas
+repo_name: bellum-atlas
 
 theme:
   name: material

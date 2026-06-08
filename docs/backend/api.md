@@ -1,6 +1,6 @@
 # API Reference
 
-Base URL: `http://localhost:3000` (desarrollo) / `https://api.arescodex.com` (producción)
+Base URL: `http://localhost:3000` (desarrollo) / `https://api.bellumatlas.com` (producción)
 
 ---
 

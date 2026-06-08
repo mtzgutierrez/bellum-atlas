@@ -6,12 +6,12 @@ Hay **un solo** fichero `.env` en la raíz del proyecto (cópialo de
 ```env
 # General
 NODE_ENV=development
-COMPOSE_PROJECT_NAME=ares_codex_app
+COMPOSE_PROJECT_NAME=bellum_atlas
 
 # PostgreSQL
-POSTGRES_DB=ares_db
-POSTGRES_USER=ares_user
-POSTGRES_PASSWORD=ares_pass
+POSTGRES_DB=bellum_db
+POSTGRES_USER=bellum_user
+POSTGRES_PASSWORD=bellum_pass
 POSTGRES_PORT=5432
 POSTGRES_HOST=postgres
 DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?schema=public"

@@ -7,7 +7,7 @@
 #   ./scripts/pregen.sh 100 900
 set -e
 
-CONTAINER="${BACKEND_CONTAINER:-ares_codex_app_backend}"
+CONTAINER="${BACKEND_CONTAINER:-bellum_atlas-backend-1}"
 WEB="${1:-100}"
 BASIC="${2:-900}"
 

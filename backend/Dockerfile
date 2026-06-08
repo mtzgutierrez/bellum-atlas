@@ -21,8 +21,13 @@ FROM node:24 AS build
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install 
+RUN npm install
 COPY . .
+# Genera el cliente de Prisma ANTES de podar: la CLI `prisma` es devDependency,
+# pero el cliente generado vive en node_modules/.prisma + @prisma/client (que es
+# dependency) y sobrevive al prune. Sin esto, la imagen de producción crashea al
+# arrancar con "Cannot find module '.prisma/client'".
+RUN npx prisma generate
 RUN npm run build
 
 # Delete development dependencies
@@ -41,4 +46,5 @@ EXPOSE 3000
 
 USER node
 
-CMD ["node", "dist/index.js"]
+# El entrypoint de Nest es dist/main.js (nest build compila src/main.ts).
+CMD ["node", "dist/main.js"]

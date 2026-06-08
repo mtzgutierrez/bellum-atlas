@@ -49,13 +49,13 @@
 | **PWA / modo offline** | Acceso sin conexión para investigadores de campo. |
 | **OAuth** | Login con Google y GitHub. |
 | **i18n** | Internacionalización: inglés, francés, alemán. |
-| **API pública** | Endpoint documentado para que terceros consuman los datos de AresCodex. |
+| **API pública** | Endpoint documentado para que terceros consuman los datos de Bellum Atlas. |
 
 ---
 
 ## Modelo de negocio
 
-Una vez completado el MVP, AresCodex puede monetizarse con tres fuentes compatibles:
+Una vez completado el MVP, Bellum Atlas puede monetizarse con tres fuentes compatibles:
 
 ### 1. Publicidad contextual (AdSense / Ezoic)
 Tráfico orgánico SEO sobre búsquedas de nicho histórico-militar. Con **15.000–20.000 visitas/mes** se alcanzan ~100 €/mes.

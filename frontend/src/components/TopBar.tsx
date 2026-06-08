@@ -16,7 +16,7 @@ export default function TopBar() {
         <span className="mark">
           <Icon name="sword" size={14} />
         </span>
-        AresCodex
+        Bellum Atlas
       </Link>
       <nav className="topbar-nav">
         {NAV.map((item) => {

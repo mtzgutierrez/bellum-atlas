@@ -1,4 +1,4 @@
-# Plan de monetización — Historical Atlas (ares-codex)
+# Plan de monetización — Historical Atlas (bellum-atlas)
 
 > Documento de estrategia de negocio. Plan por fases para monetizar la app de
 > batallas históricas (mapa Leaflet sobre datos de Wikidata/Wikipedia + relatos

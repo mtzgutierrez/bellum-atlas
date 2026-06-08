@@ -1,6 +1,6 @@
 # Arquitectura — Visión general
 
-AresCodex son **dos servicios** (backend y frontend) más la infraestructura
+Bellum Atlas son **dos servicios** (backend y frontend) más la infraestructura
 (PostgreSQL + Redis). Los datos se cargan por **ingesta** desde Wikidata y
 Wikipedia mediante un comando CLI del backend; no hay scraper aparte.
 

@@ -1,197 +1,187 @@
-# ⚔ AresCodex
+<div align="center">
 
-> **Atlas histórico interactivo de conflictos militares.**  
-> Datos reales + Búsqueda potente + Mapa épico = Producto completo.
+# ⚔ Bellum Atlas
 
-AresCodex es una plataforma web que centraliza datos de miles de batallas y conflictos históricos en una experiencia visual moderna: mapas interactivos, fichas detalladas, líneas de tiempo y perfiles de comandantes. Todo lo que Wikipedia tiene, presentado con la claridad y la potencia que merece.
+**Atlas histórico interactivo de batallas sobre un mapa.**
 
----
+Geografía e Historia del conflicto: cada batalla, situada en el mapa, con su ficha,
+su contexto de Wikipedia y —en las más relevantes— una narrativa ampliada por IA.
 
-## ¿Qué es AresCodex?
+`NestJS` · `Prisma` · `PostgreSQL` · `BullMQ + Redis` · `React + Vite` · `Leaflet` · `Docker`
 
-Una herramienta que no existe en internet tal y como se plantea: una base de datos estructurada de más de **5.000 batallas reales** con geolocalización, filtros avanzados y visualización en mapa, construida sobre datos scrapeados de Wikipedia y enriquecidos con geocodificación y normalización automática.
-
-El producto se dirige tanto al entusiasta de la historia militar como al investigador o estudiante que necesita referencias rápidas y contextualizadas.
+</div>
 
 ---
 
-## Características del MVP
+## ¿Qué es?
 
-### Mapa Interactivo
-- Mapa Mapbox a pantalla completa con todos los pins georreferenciados
-- Clustering automático por zoom
-- Popup al clicar: nombre, fecha, resultado y enlace a la ficha completa
-- Filtros laterales por era, tipo de batalla y resultado
+Bellum Atlas toma datos abiertos de **Wikidata** y **Wikipedia** y los convierte en
+un atlas navegable de batallas históricas: un mapa a pantalla completa, un catálogo
+con filtros, fichas ricas por batalla, una cronología por siglos y efemérides del
+día. Sobre ese contenido gratuito, una capa de **IA pre-generada** añade narrativa
+divulgativa a las batallas más importantes, a modo de vitrina curada.
 
-### Búsqueda y Catálogo
-- Búsqueda full-text sobre nombre de batalla, guerra, comandantes y lugar (PostgreSQL `tsvector`)
-- Filtros combinables: era histórica, país, resultado, tipo (terrestre / naval / aéreo / asedio)
-- Resultados paginados y ordenables por fecha, nombre o número de bajas
-- URLs compartibles con parámetros de búsqueda
+No hay cuentas ni login: todo el contenido es público.
 
-### Fichas de Batalla
-- Cabecera con nombre, fecha, guerra padre y resultado destacado
-- Mini-mapa embebido centrado en la ubicación exacta
-- Facciones con comandantes, bajas estimadas y resultado por bando
-- Batallas relacionadas de la misma guerra ordenadas cronológicamente
+### Características
 
-### Fichas de Guerra
-- Período completo, resultado global y descripción
-- Lista cronológica de batallas
-- Estadísticas: número de batallas, bajas totales, duración
-- Mini-mapa con todos los pins de la guerra
-
-### Timeline Histórica
-- Feed cronológico agrupado por siglo
-- Filtro por era histórica
-- Diseño tipo eje de tiempo con tarjetas laterales
-
-### Perfiles de Comandantes
-- Ficha con nombre, país, años de vida y batallas en las que participó
-- Ratio de victorias sobre el total de batallas
-- Enlace a Wikipedia
-
-### Autenticación
-- Registro con email + contraseña
-- JWT con refresh token en `httpOnly` cookie
-- Base lista para construir features personalizadas encima
+- 🗺️ **Mapa interactivo** (Leaflet) con *clustering* y ventana temporal de 150 años.
+- 🔎 **Catálogo** paginado con filtros por tipo (batalla/asedio/campaña) y orden
+  (importancia, año, nombre) y búsqueda por nombre.
+- 📄 **Ficha de batalla**: imagen y resumen de Wikipedia, mini-mapa de ubicación,
+  “batallas de la misma época”, **contexto histórico** (artículo completo de
+  Wikipedia con *backfill* perezoso) y, si existe, **narrativa ampliada por IA**.
+- 📅 **Un día como hoy**: efemérides por día/mes actual.
+- 🕰️ **Cronología** agrupada por siglo.
+- 📊 **Estadísticas** del catálogo (por tipo, por siglo, cobertura de imagen/IA…).
 
 ---
 
-## Stack Tecnológico
-
-| Capa | Tecnología | Nota |
-|---|---|---|
-| Frontend | React 18 + Vite + TailwindCSS + React Query | SPA sin SSR en MVP |
-| Backend | NestJS + Prisma + PostgreSQL + PostGIS | API REST, módulos por dominio |
-| Scraper | Python · Scrapy + BeautifulSoup | Servicio independiente, comunica por HTTP |
-| Queue / Cache | BullMQ + Redis | Jobs del scraper, caché de búsquedas |
-| Mapas | Mapbox GL JS | Plan gratuito suficiente para MVP |
-| Auth | JWT + Passport.js | Sin OAuth en MVP |
-| Infra | Docker Compose (dev) + Railway / Fly.io (prod) | Deploy sencillo, coste bajo |
-
----
-
-## Arquitectura del Scraper
-
-El scraper es un servicio Python independiente que extrae datos de Wikipedia y los envía a la API NestJS:
-
-1. **Punto de entrada**: categorías de Wikipedia (`Battles by century`, `Naval battles`, `Battles of World War II`…)
-2. **Extracción**: infobox con BeautifulSoup — nombre, fecha, lugar, facciones, comandantes, resultado, bajas
-3. **Normalización**: fechas a ISO 8601, bajas a enteros o rangos, coordenadas a WGS84 decimal
-4. **Geocodificación**: si la infobox no incluye coordenadas → Nominatim (OpenStreetMap, gratuito)
-5. **Push**: `POST /internal/scraper/battle` con API key interna; NestJS valida, desduplicita y persiste
-
-El scraper nunca escribe directamente en PostgreSQL. Toda inserción pasa por la API para mantener las validaciones centralizadas.
-
----
-
-## Modelo de Datos (Prisma)
+## Arquitectura
 
 ```
-HistoricalEra  ──< War ──< Battle ──< BattleFaction ──< CommanderFaction >── Commander
-                                  └── Location
-User
+┌─────────────┐      HTTP/JSON      ┌──────────────────────┐      ┌────────────┐
+│  Frontend   │ ─────────────────▶ │  Backend (NestJS)     │ ───▶ │ PostgreSQL │
+│ React+Vite  │                    │  REST API + Prisma    │      └────────────┘
+│  + Leaflet  │ ◀───────────────── │                       │ ───▶ ┌────────────┐
+└─────────────┘                    │  Colas BullMQ ───────────────│   Redis    │
+                                   └──────────┬────────────┘      └────────────┘
+                                              │ workers (background)
+                                              ▼
+                                   Wikidata (SPARQL) · Wikipedia (REST) · LLM (Claude)
 ```
 
-Diseñado para que las features futuras (IA, colecciones, workspace) se añadan como modelos nuevos o campos opcionales, sin migraciones destructivas.
+- **Una sola entidad de dominio**: `Battle` (+ `BattleAISummary`). Guerras y
+  comandantes se retiraron por baja fiabilidad de los datos.
+- **Ingesta**: pipeline en TypeScript que consulta Wikidata (SPARQL) para los datos
+  estructurados y Wikipedia (REST) para imagen y resumen renderizables. Upsert
+  idempotente por `wikidataId`.
+- **Sin PostGIS**: las consultas por *bounding box* usan un índice compuesto
+  `(latitude, longitude)`.
+
+### IA — regla central: *Zero Real-Time Generation*
+
+El LLM **nunca** se invoca dentro de una petición HTTP. El endpoint
+`GET /battles/:id/ai-story` es abierto y devuelve la narrativa **pre-generada** o
+`{ status: "unavailable" }` si aún no existe. El contenido lo producen procesos en
+segundo plano (cron diario, `pregen`, ingesta) mediante *workers* BullMQ que
+persisten el resultado en `BattleAISummary` (caché permanente).
+
+`LlmService` soporta dos proveedores vía `AI_PROVIDER`:
+- `mock` (por defecto) — plantilla local, sin coste ni red.
+- `anthropic` — Claude con *prompt caching* y, opcionalmente, búsqueda web.
 
 ---
 
-## Plan de Desarrollo (4 semanas)
+## Puesta en marcha (desarrollo)
 
-| Semana | Bloque | Entregable |
-|---|---|---|
-| 1 | Infraestructura + Scraper | Docker Compose, schema Prisma, endpoint interno, seed ~1.000 batallas |
-| 2 | API + datos completos | Endpoints REST, búsqueda full-text, auth, seed ~5.000 batallas |
-| 3 | Frontend core | Home, búsqueda, fichas, Map Explorer, responsivo |
-| 4 | Pulido + Deploy | Timeline, perfiles, login UI, deploy en producción con dominio y HTTPS |
-
----
-
-## Modelo de Negocio
-
-Tres fuentes compatibles entre sí:
-
-### 1. Publicidad Contextual (AdSense / Ezoic)
-Tráfico orgánico SEO sobre búsquedas de nicho histórico-militar (`"mapa batalla de Stalingrado"`, `"comandantes Guerra de Sucesión Española"`…). Con **15.000–20.000 visitas/mes** se alcanzan ~100 €/mes sin esfuerzo adicional.
-
-### 2. Afiliados Amazon
-Libros de historia militar recomendados en cada ficha de batalla y guerra (comisión 3–10%). Integración natural: el usuario que lee sobre Waterloo tiene alta intención de compra de bibliografía relacionada.
-
-### 3. Tier Premium (Patreon / Stripe)
-~5 €/mes para entusiastas y estudiantes. Da acceso a:
-- Mapas animados de movimientos de tropas
-- Exportación de datos (PDF, CSV, citas en Chicago/APA/MLA)
-- Sin anuncios
-- Acceso anticipado a features nuevas
-
-Con **20 suscriptores premium** se superan los 100 €/mes. La mezcla de ads + afiliados + suscripciones hace el objetivo más alcanzable y diversifica el riesgo.
-
-### Proyección realista
-Con SEO de nicho histórico bien trabajado y 20–30 páginas de batallas optimizadas para búsquedas concretas, el objetivo de **100 €/mes es alcanzable en 6–12 meses** prácticamente sin mantenimiento activo una vez completado el seed inicial.
-
----
-
-## Roadmap Post-MVP
-
-Ordenado por impacto esperado:
-
-| Prioridad | Feature | Valor |
-|---|---|---|
-| Alta | AI Insights (Claude API) | Análisis estratégico por batalla — diferencial frente a Wikipedia |
-| Alta | Statistics Dashboard | Gráficas de bajas, naciones, siglos — muy compartible en redes |
-| Alta | Battle Comparator | Comparativa side-by-side — útil para investigadores |
-| Media | Timeline visual animada | Eje cronológico navegable tipo `vis-timeline` |
-| Media | Research Workspace | Notas + conexiones entre batallas — herramienta académica |
-| Media | Colecciones de usuario | "Mis batallas favoritas", listas compartibles |
-| Media | Citation Export | Citas en Chicago/APA/MLA — útil para universitarios |
-| Baja | What-if Simulator | Contrafactuales con IA — la feature más espectacular |
-| Baja | Heatmap histórico | Densidad de conflictos por región y época |
-| Baja | PWA / modo offline | Acceso sin conexión |
-
----
-
-## Criterios de Éxito del MVP
-
-- Base de datos con al menos **3.000 batallas** con localización geográfica
-- Búsqueda con resultados relevantes en menos de **500ms**
-- Mapa con todos los pins en menos de **3 segundos** con conexión estándar
-- Fichas de batalla con: nombre, fecha, facciones, comandantes y ubicación
-- Aplicación funcional en móvil (responsive completo)
-- Deploy en producción con dominio propio y HTTPS
-
----
-
-## Comunidades objetivo
-
-- [r/WarHistory](https://reddit.com/r/WarHistory), [r/HistoryMaps](https://reddit.com/r/HistoryMaps)
-- Canales de YouTube de historia militar
-- Foros de wargames y simulación histórica
-- Estudiantes universitarios de Historia y Ciencias Militares
-
----
-
-## Desarrollo local
+Requisitos: Docker + Docker Compose. (El host no necesita Node 20+: todo corre en
+contenedores.)
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/tu-usuario/ares-codex.git
-cd ares-codex
+# 1. Configura el entorno
+cp .env.example .env        # ajusta POSTGRES_*, AI_PROVIDER, etc.
 
-# Levantar servicios
-docker compose up -d
+# 2. Levanta la base de datos, Redis y el backend (con hot-reload)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis backend
 
-# Backend
-cd backend && npm install && npm run start:dev
+# 3. (Opcional) levanta también el frontend
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d frontend
+```
 
-# Frontend
-cd frontend && npm install && npm run dev
+| Servicio | URL |
+|----------|-----|
+| API | http://localhost:3000 |
+| Swagger | http://localhost:3000/api/docs |
+| Frontend | http://localhost:5173 |
+| Docs (mkdocs) | http://localhost:8000 |
 
-# Scraper
-cd scraper && pip install -r requirements.txt && scrapy crawl battles
+### Poblar la base de datos
+
+```bash
+# Seed offline: 3 batallas famosas a mano (arranque sin red / tests)
+./backend/scripts/seed.sh
+
+# Ingesta real desde Wikidata
+./backend/scripts/ingest.sh battle:Q165425     # una batalla (Lepanto)
+./backend/scripts/ingest.sh top-battles        # top por sitelinks
+./backend/scripts/ingest.sh all-battles        # bulk paginado
+```
+
+> 💾 Los datos (sobre todo `battle_ai_summaries`) son caros de regenerar. Usa
+> `./backend/scripts/db-backup.sh` con frecuencia. Ver `docs/backend/backups.md`.
+
+---
+
+## Endpoints principales
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/battles` | Listado paginado con filtros (`type`, `sort`, `search`, años, bbox). |
+| `GET` | `/battles/points` | Puntos para el mapa (filtrables por año/bbox). |
+| `GET` | `/battles/on-this-day` | Efemérides del día actual. |
+| `GET` | `/battles/timeline` | Top batallas para la cronología. |
+| `GET` | `/battles/centuries` | Recuento por siglo. |
+| `GET` | `/battles/stats` | Agregados del catálogo. |
+| `GET` | `/battles/:id` | Detalle por id o slug. |
+| `GET` | `/battles/:id/article` | Artículo de Wikipedia (cacheado en BD). |
+| `GET` | `/battles/:id/ai-story` | Narrativa por IA (solo pre-generada). |
+| `GET` | `/health` | Estado del servicio + conectividad con la BD. |
+
+---
+
+## Tests y calidad
+
+```bash
+# Unitarios (mockeados, sin BD)
+cd backend && npm test
+
+# Integración contra una PostgreSQL real y efímera
+docker compose -f docker-compose.test.yml up -d --wait
+DATABASE_URL=postgresql://test:test@localhost:5433/bellum_test?schema=public \
+  npx prisma migrate deploy && npm run test:e2e
+docker compose -f docker-compose.test.yml down -v
+```
+
+CI (GitHub Actions, `.github/workflows/`):
+
+- **`ci.yml`** (gate de PR): unitarias, e2e con Postgres real, **gate de build**
+  (typecheck + build + smoke de la imagen de producción contra `/health`) y
+  escaneos de seguridad (`npm audit`, gitleaks, CodeQL, Trivy).
+- **`security-dast.yml`** (nightly): OWASP ZAP baseline contra la app.
+- **`perf.yml`** (nightly): pruebas de carga con k6 y umbrales p95.
+
+Análisis de seguridad/rendimiento y plan de pruebas:
+[`docs/desarrollo/analisis-seguridad-rendimiento.md`](docs/desarrollo/analisis-seguridad-rendimiento.md).
+
+---
+
+## Estructura del repositorio
+
+```
+backend/      API NestJS + Prisma + colas BullMQ + pipeline de ingesta
+frontend/     SPA React + Vite + Leaflet
+docs/         Documentación (mkdocs-material)
+docker-compose.yml          base (postgres, redis, backend, frontend)
+docker-compose.dev.yml      overrides de desarrollo (hot-reload, pgadmin, docs…)
+docker-compose.test.yml     PostgreSQL efímera para tests de integración
 ```
 
 ---
 
-*AresCodex MVP · Plan v2.0 · 4 semanas*
+## Stack
+
+| Capa | Tecnología |
+|------|-----------|
+| Frontend | React 19 · Vite · React Router · Leaflet |
+| Backend | NestJS 11 · Prisma 7 · PostgreSQL 18 |
+| Colas / caché | BullMQ · Redis |
+| IA | Anthropic Claude (vía workers; `mock` por defecto) |
+| Datos | Wikidata (SPARQL) · Wikipedia (REST) |
+| Infra | Docker Compose · GitHub Actions |
+
+---
+
+<div align="center">
+<sub>Bellum Atlas — proyecto divulgativo y educativo. Datos de Wikipedia/Wikidata bajo sus respectivas licencias.</sub>
+</div>

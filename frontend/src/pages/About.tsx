@@ -16,7 +16,7 @@ export default function About() {
         <div className="about-eyebrow">Acerca del proyecto</div>
         <h1 className="about-title">Geografía e Historia del Conflicto</h1>
         <p className="about-lede">
-          Ares Codex es un atlas interactivo de batallas históricas: las sitúa
+          Bellum Atlas es un atlas interactivo de batallas históricas: las sitúa
           sobre el mapa, las ordena en el tiempo y las acompaña de contexto para
           que explorar la historia militar sea claro y visual.
         </p>
@@ -75,7 +75,7 @@ export default function About() {
       <section className="about-section">
         <h2 className="about-section-title">Naturaleza del proyecto</h2>
         <p>
-          Ares Codex es un proyecto divulgativo y educativo, sin gamificación ni
+          Bellum Atlas es un proyecto divulgativo y educativo, sin gamificación ni
           estadísticas inventadas: solo los hechos situados sobre el mapa, con su
           fecha y sus bandos. El sitio puede incluir publicidad o funciones de
           pago para sostener su desarrollo y mantenimiento.

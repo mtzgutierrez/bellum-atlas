@@ -1,17 +1,17 @@
-# ⚔ AresCodex
+# ⚔ Bellum Atlas
 
 > **Atlas histórico interactivo de batallas.**
 
-AresCodex centraliza datos de batallas históricas en una experiencia visual:
+Bellum Atlas centraliza datos de batallas históricas en una experiencia visual:
 un mapa interactivo, fichas detalladas con imagen y resumen, y una narrativa
 generada por IA (Premium) precomputada en background.
 
 ---
 
-## ¿Por qué existe AresCodex?
+## ¿Por qué existe Bellum Atlas?
 
 Wikipedia y Wikidata contienen información extraordinaria sobre historia
-militar, pero fragmentada. AresCodex la **ingiere**, la estructura y la presenta
+militar, pero fragmentada. Bellum Atlas la **ingiere**, la estructura y la presenta
 como un producto coherente:
 
 - **Mapa global** de batallas georreferenciadas, filtrable por periodo.
@@ -37,8 +37,8 @@ scraper): ver [Ingesta](backend/ingesta.md).
 ## Inicio rápido
 
 ```bash
-git clone https://github.com/tu-usuario/ares-codex.git
-cd ares-codex
+git clone https://github.com/tu-usuario/bellum-atlas.git
+cd bellum-atlas
 cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 # poblar la BD:

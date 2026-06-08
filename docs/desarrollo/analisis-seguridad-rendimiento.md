@@ -1,4 +1,4 @@
-# Análisis de Seguridad y Rendimiento — ares-codex
+# Análisis de Seguridad y Rendimiento — bellum-atlas
 
 > Fecha: 2026-06-08 · Rama analizada: `feat/llm` · Alcance: backend NestJS, frontend
 > React, despliegue Docker Compose. Análisis estático del código + revisión de
@@ -21,7 +21,8 @@ decisión arquitectónica es sólida y elimina la clase de riesgos más cara
 
 Sin embargo, el análisis revela:
 
-- **1 bug crítico de despliegue** que impide arrancar el contenedor de producción.
+- **2 bugs críticos de despliegue** (D-1, D-2) que impedían arrancar el contenedor
+  de producción — ya corregidos y verificados.
 - **Varios puntos de seguridad** centrados en la exposición de servicios de
   infraestructura (Redis/Postgres) y endurecimiento ausente (headers, validación,
   CORS). Los riesgos ligados a autenticación desaparecen al no haber cuentas.
@@ -36,14 +37,18 @@ exposición de Redis/Postgres → **(2)** caché + índices en endpoints públic
 
 ---
 
-## 0. Bug crítico de despliegue (bloqueante)
+## 0. Bugs críticos de despliegue (bloqueantes) — ✅ corregidos
 
-| ID | Descripción | Archivo | Severidad |
-|----|-------------|---------|-----------|
-| D-1 | El `CMD` de producción ejecuta `node dist/index.js`, pero `nest build` genera el entrypoint en **`dist/main.js`** (no existe `dist/index.js`). El contenedor `production` falla al instante y entra en *crash-loop*. | `backend/Dockerfile` (stage `production`) | 🔴 Crítica |
+Ambos impedían arrancar el contenedor de producción y fueron detectados/verificados
+por el nuevo *smoke test* del gate de build (job `build` en `ci.yml`).
 
-**Mitigación:** cambiar a `CMD ["node", "dist/main.js"]`. Añadir un *smoke test*
-en CI que levante la imagen `production` y haga `GET /health`.
+| ID | Descripción | Archivo | Severidad | Estado |
+|----|-------------|---------|-----------|--------|
+| D-1 | El `CMD` de producción ejecutaba `node dist/index.js`, pero `nest build` genera el entrypoint en **`dist/main.js`** (no existe `dist/index.js`) → *crash-loop*. | `backend/Dockerfile` (stage `production`) | 🔴 Crítica | ✅ `CMD ["node", "dist/main.js"]` |
+| D-2 | El stage de build **no ejecutaba `prisma generate`**, así que la imagen de producción arrancaba sin el cliente de Prisma generado y crasheaba con `Cannot find module '.prisma/client'`. | `backend/Dockerfile` (stage `build`) | 🔴 Crítica | ✅ `RUN npx prisma generate` antes del prune |
+
+**Verificación:** la imagen `production` se levanta junto a Postgres+Redis y
+responde `GET /health` con `status:ok`. Este smoke corre ahora en cada PR.
 
 ---
 
@@ -105,6 +110,26 @@ La app no tiene cuentas, así que se borró todo el código de autenticación. E
 Pirámide propuesta: **muchas unitarias** (lógica pura, sin red ni BD, *mocks* de
 Prisma/colas/`fetch`), **integración media** contra una **Postgres real efímera**
 (sin mockear el repositorio) y una capa fina de **seguridad/carga**.
+
+> ### ✅ Estado de ejecución (2026-06-08)
+> El plan **se ha implementado y ejecutado** (vía Docker; el host es Node 18):
+> - **Unitarias: 74/74 ✅** en 12 specs (`src/**/*.spec.ts`), módulos `battle`,
+>   `common`, `ingestion`, `ai`. Comando: `npm test`.
+> - **Integración: 15/15 ✅** (`test/battles.e2e-spec.ts`) contra Postgres real de
+>   `docker-compose.test.yml`. Comando: `npm run test:e2e`.
+> - **Cobertura (solo unitarias)**: `common` y `dto` 100 %; `ai-queue`/`ai.processor`/
+>   `daily-enrichment` 100 %; `battle.repository` ~78 %, `ingestion`/`wikidata` ~58 %,
+>   `llm.service` ~43 % (la rama Anthropic real requiere red, no se unit-testea). El
+>   total global (~45 %) está lastrado por entrypoints (`seed`/`ingest`/`pregen`/
+>   `ai-export`…) y módulos de *wiring*; la integración cubre controllers/repos extra.
+> - **`npm audit`**: backend 6 vulns transitivas (5 moderate `hono`/`qs`, 1 high),
+>   frontend 1 moderate (`brace-expansion`). Resolubles con `npm audit fix`.
+> - **Corregido durante la ejecución**: `PrismaService` no cerraba el `Pool` de
+>   `pg` en `onModuleDestroy` (open handle en Jest + shutdown sucio en prod). Se
+>   añadió `pool.end()`; el aviso de Jest desaparece.
+> - **Pendiente (requiere stack/herramientas externas, no automatizado aquí):**
+>   DAST (ZAP), `nmap`/`trivy`/`gitleaks` (3.3) y las pruebas de carga k6/autocannon
+>   (3.4) — necesitan el stack completo levantado y binarios no presentes en el host.
 
 ### 3.1 Pruebas unitarias exhaustivas (Jest, ya configurado)
 
@@ -175,7 +200,7 @@ puros; activar `--coverage` en CI con umbral que falle el build por debajo.
 > `postgres-test` (sin backend, frontend ni Redis).
 
 **Infraestructura (`docker-compose.test.yml`):**
-- Postgres 18.1-alpine, BD `ares_test`, usuario/clave `test/test`.
+- Postgres 18.1-alpine, BD `bellum_test`, usuario/clave `test/test`.
 - Puerto host **5433** (no colisiona con la BD de desarrollo en 5432).
 - Datos en **tmpfs** (RAM): arranque rápido y estado efímero entre ejecuciones.
 - `healthcheck` con `pg_isready` para esperar a que esté lista.
@@ -183,7 +208,7 @@ puros; activar `--coverage` en CI con umbral que falle el build por debajo.
 **Flujo de ejecución (local y CI):**
 ```bash
 docker compose -f docker-compose.test.yml up -d --wait
-export DATABASE_URL="postgresql://test:test@localhost:5433/ares_test?schema=public"
+export DATABASE_URL="postgresql://test:test@localhost:5433/bellum_test?schema=public"
 cd backend
 npx prisma migrate deploy          # aplica el esquema real (migraciones + triggers)
 npm run test:e2e                   # Jest + Supertest sobre la app Nest

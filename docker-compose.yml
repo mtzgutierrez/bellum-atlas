@@ -1,7 +1,6 @@
 services:
   postgres:
     image: postgres:18.1-alpine
-    container_name: ares_codex_app_postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -20,7 +19,6 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    container_name: ares_codex_app_redis
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
@@ -38,7 +36,6 @@ services:
     build:
       context: ./backend
       target: ${BUILD_TARGET:-development}
-    container_name: ares_codex_app_backend
     environment:
       NODE_ENV: ${NODE_ENV}
       PORT: 3000
@@ -67,7 +64,6 @@ services:
     build:
       context: ./frontend
       target: ${BUILD_TARGET:-development}
-    container_name: ares_codex_app_frontend
     environment:
       NODE_ENV: ${NODE_ENV}
       VITE_API_URL: ${VITE_API_URL}
