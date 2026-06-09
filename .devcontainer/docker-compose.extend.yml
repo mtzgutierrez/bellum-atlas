@@ -1,0 +1,24 @@
+# Overrides aplicados SOLO cuando se trabaja dentro del DevContainer.
+# Se combina con ../docker-compose.yml y ../docker-compose.dev.yml.
+#
+# El servicio `backend` se convierte en el contenedor de desarrollo al que VS
+# Code se conecta: monta TODO el repo en /workspace y se mantiene vivo con
+# `sleep infinity`. El developer arranca el backend a mano desde una terminal
+# del editor (`cd backend && npm run start:dev`). El frontend, postgres y redis
+# siguen levantándose como servicios independientes de Compose.
+services:
+  backend:
+    # Mantiene el contenedor vivo; VS Code abre terminales dentro de él.
+    command: /bin/sh -c "while sleep 1000; do :; done"
+    working_dir: /workspace
+    user: node
+    volumes:
+      # Repo completo accesible desde el editor.
+      - ..:/workspace:cached
+      # node_modules en volúmenes anónimos para no pisar los del host.
+      - /workspace/backend/node_modules
+      - /workspace/frontend/node_modules
+    environment:
+      # Dentro del contenedor el backend habla con los servicios por nombre.
+      DATABASE_HOST: postgres
+      REDIS_HOST: redis
