@@ -1,5 +1,5 @@
 {
-  "name": "Battle Atlas",
+  "name": "Bellum Atlas",
   "dockerComposeFile": [
     "../docker-compose.yml",
     "../docker-compose.dev.yml",
@@ -33,7 +33,6 @@
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
         "Prisma.prisma",
-        "bradlc.vscode-tailwindcss",
         "ms-azuretools.vscode-docker",
         "eamodio.gitlens"
       ],

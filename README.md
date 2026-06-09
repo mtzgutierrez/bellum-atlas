@@ -1,13 +1,33 @@
 <div align="center">
 
-# ⚔ Bellum Atlas
+# ⚔️ Bellum Atlas
 
-**Atlas histórico interactivo de batallas sobre un mapa.**
+### *Atlas histórico interactivo de batallas sobre un mapa.*
 
 Geografía e Historia del conflicto: cada batalla, situada en el mapa, con su ficha,
 su contexto de Wikipedia y —en las más relevantes— una narrativa ampliada por IA.
 
-`NestJS` · `Prisma` · `PostgreSQL` · `BullMQ + Redis` · `React + Vite` · `Leaflet` · `Docker`
+<br/>
+
+[![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)](https://nestjs.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?style=for-the-badge&logo=prisma&logoColor=white)](https://www.prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?style=flat-square&logo=leaflet&logoColor=white)](https://leafletjs.com/)
+[![Redis](https://img.shields.io/badge/Redis-BullMQ-DC382D?style=flat-square&logo=redis&logoColor=white)](https://docs.bullmq.io/)
+[![Claude](https://img.shields.io/badge/Claude-Anthropic-D97757?style=flat-square&logo=anthropic&logoColor=white)](https://www.anthropic.com/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Dev Container](https://img.shields.io/badge/Dev_Container-ready-0db7ed?style=flat-square&logo=visualstudiocode&logoColor=white)](.devcontainer/devcontainer.json)
+[![Node](https://img.shields.io/badge/Node-24-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+
+[**Características**](#características) ·
+[**Arquitectura**](#arquitectura) ·
+[**Empezar**](#puesta-en-marcha-desarrollo) ·
+[**Endpoints**](#endpoints-principales) ·
+[**Contribuir**](CONTRIBUTING.md)
 
 </div>
 
@@ -169,33 +189,14 @@ docker-compose.test.yml     PostgreSQL efímera para tests de integración
 
 ---
 
-<<<<<<< HEAD
-## Stack
-
-| Capa | Tecnología |
-|------|-----------|
-| Frontend | React 19 · Vite · React Router · Leaflet |
-| Backend | NestJS 11 · Prisma 7 · PostgreSQL 18 |
-| Colas / caché | BullMQ · Redis |
-| IA | Anthropic Claude (vía workers; `mock` por defecto) |
-| Datos | Wikidata (SPARQL) · Wikipedia (REST) |
-| Infra | Docker Compose · GitHub Actions |
-
----
-
-<div align="center">
-<sub>Bellum Atlas — proyecto divulgativo y educativo. Datos de Wikipedia/Wikidata bajo sus respectivas licencias.</sub>
-</div>
-=======
 ## Variables de entorno principales
 
 | Variable | Descripción | Por defecto |
 |---|---|---|
 | `DATABASE_URL` | Conexión PostgreSQL | — |
 | `REDIS_HOST` / `REDIS_PORT` | BullMQ / Redis | `localhost` / `6379` |
-| `JWT_SECRET` / `JWT_EXPIRATION` | Firma de tokens | — / `7d` |
 | `AI_PROVIDER` | `mock` o `anthropic` | `mock` |
-| `ANTHROPIC_API_KEY` | Clave de Claude | — |
+| `ANTHROPIC_API_KEY` | Clave de Claude (solo si `AI_PROVIDER=anthropic`) | — |
 | `AI_MODEL` | Modelo a usar | `claude-sonnet-4-6` |
 | `AI_AUTO_QUEUE_MIN_SCORE` | Umbral de auto-encolado de IA | `80` |
 | `CORS_ORIGIN` | Origen permitido | `http://localhost:5173` |
@@ -216,7 +217,9 @@ Lista completa en [`.env.example`](.env.example).
 | `npm test` | Tests (Jest, mockeados) |
 | `npm run lint` | ESLint + fix |
 | `npm run build` | Compila a `dist/` |
-| `npx prisma migrate dev` | Migraciones |
+| `npm run seed` | Seed offline (3 batallas) |
+| `npm run ingest -- <spec>` | Ingesta desde Wikidata |
+| `npm run pregen` | Pre-genera narrativas de IA |
 
 </td><td>
 
@@ -232,16 +235,16 @@ Lista completa en [`.env.example`](.env.example).
 
 ---
 
-## 🗺️ Roadmap
+## Stack
 
-- [x] Ingestión desde Wikidata/Wikipedia por CLI
-- [x] Mapa interactivo con Leaflet
-- [x] Narrativas de IA pre-computadas (Story Mode)
-- [x] Auth con tiers free/premium
-- [ ] Mapas animados de movimientos de tropas
-- [ ] Comparador de batallas side-by-side
-- [ ] Exportación de citas (Chicago / APA / MLA)
-- [ ] Dashboard de estadísticas
+| Capa | Tecnología |
+|------|-----------|
+| Frontend | React 19 · Vite · React Router · Leaflet |
+| Backend | NestJS 11 · Prisma 7 · PostgreSQL 18 |
+| Colas / caché | BullMQ · Redis |
+| IA | Anthropic Claude (vía workers; `mock` por defecto) |
+| Datos | Wikidata (SPARQL) · Wikipedia (REST) |
+| Infra | Docker Compose · GitHub Actions |
 
 ---
 
@@ -263,5 +266,6 @@ Ver [`LICENSE.md`](LICENSE.md).
 
 ---
 
-*Battle Atlas · Atlas histórico interactivo de conflictos militares*
->>>>>>> 0514cbb (feat: add deployment guide for Hetzner and Namecheap integration)
+<div align="center">
+<sub>Bellum Atlas — proyecto divulgativo y educativo. Datos de Wikipedia/Wikidata bajo sus respectivas licencias.</sub>
+</div>

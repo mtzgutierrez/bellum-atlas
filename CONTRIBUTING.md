@@ -1,4 +1,4 @@
-# Contribuir a Battle Atlas
+# Contribuir a Bellum Atlas
 
 ¡Gracias por colaborar! Esta guía explica cómo poner en marcha el proyecto con
 **DevContainers** y las convenciones que seguimos. El entorno recomendado y
@@ -28,8 +28,8 @@ Solo necesitas tres cosas en tu máquina:
 1. Clona el repositorio:
 
    ```bash
-   git clone https://github.com/tu-usuario/battle-atlas.git
-   cd battle-atlas
+   git clone https://github.com/tu-usuario/bellum-atlas.git
+   cd bellum-atlas
    ```
 
 2. Ábrelo en VS Code:
@@ -71,6 +71,12 @@ Se combina con `docker-compose.yml` + `docker-compose.dev.yml` de la raíz, así
 que el DevContainer usa exactamente la misma definición de servicios que el resto
 del equipo.
 
+> **Alternativa por servicio.** Además del DevContainer de la raíz (que abre todo
+> el repo), existen dos DevContainers más acotados si prefieres trabajar en un
+> solo servicio: `backend/.devcontainer/` (NestJS) y `frontend/.devcontainer/`
+> (Vite + React). Abre la carpeta `backend/` o `frontend/` en VS Code y haz
+> *Reopen in Container*. Esta guía asume el de la raíz.
+
 ---
 
 ## 3. Trabajar dentro del contenedor
@@ -83,12 +89,16 @@ cd backend
 npm run start:dev      # hot-reload en http://localhost:3000
 ```
 
-Siembra datos de demostración para tener con qué trabajar:
+Siembra datos para tener con qué trabajar:
 
 ```bash
 cd backend
-npx ts-node src/cli.ts demo
+npm run seed                       # 3 batallas famosas (offline, sin red)
+npm run ingest -- top-battles      # ingesta real desde Wikidata
 ```
+
+> No hay cuentas ni login: todo el contenido es público. No necesitas tokens ni
+> autenticación para usar la API en desarrollo.
 
 ### Puertos publicados
 
@@ -117,9 +127,11 @@ Backend (`backend/`):
 | `npm run lint` | ESLint con `--fix` |
 | `npm run format` | Prettier |
 | `npm run build` | Compila a `dist/` |
+| `npm run seed` | Seed offline (3 batallas famosas) |
+| `npm run ingest -- <target>` | Ingesta desde Wikidata (ver abajo) |
+| `npm run pregen` | Pre-genera narrativas de IA por tramos |
 | `npx prisma migrate dev --name <nombre>` | Crea y aplica una migración |
 | `npx prisma studio` | Explorador visual de la base de datos |
-| `npx ts-node src/cli.ts <spec>` | Ingestión de datos (ver abajo) |
 
 Frontend (`frontend/`):
 
@@ -129,33 +141,44 @@ Frontend (`frontend/`):
 | `npm run build` | Build de producción (type-check + Vite) |
 | `npm run lint` | ESLint |
 
-### CLI de ingestión
+> **Wrappers desde el host.** En `backend/scripts/` hay envoltorios que ejecutan
+> estos comandos vía `docker exec` sin entrar al contenedor: `seed.sh`,
+> `ingest.sh`, `pregen.sh`, `ai-batch.sh`, `db-backup.sh`, `db-restore.sh`.
+> Dentro del DevContainer normalmente usarás los `npm run …` directamente.
 
-Los datos provienen de **Wikidata**/**Wikipedia** (no hay scraper). Ejemplos:
+### Ingesta de datos
+
+Los datos provienen de **Wikidata** (SPARQL) y **Wikipedia** (REST); no hay
+scraper. Hay tres modos:
 
 ```bash
-npx ts-node src/cli.ts demo                    # conjunto de demostración
-npx ts-node src/cli.ts battle:Q48314           # una batalla por su QID
-npx ts-node src/cli.ts war:Q362 --with-battles # guerra + sus batallas
-npx ts-node src/cli.ts commander:Q517          # un comandante
+npm run ingest -- battle:Q165425    # una batalla por su QID (Lepanto)
+npm run ingest -- top-battles       # las más relevantes por nº de sitelinks
+npm run ingest -- all-battles       # bulk paginado (MAX_PAGES=0 → todas)
 ```
 
-Las batallas con un *importance score* alto se encolan automáticamente para
-generar su narrativa de IA.
+El upsert es idempotente por `wikidataId`. Las batallas con un *importance score*
+alto se encolan automáticamente para generar su narrativa de IA.
 
-### IA / Story Mode
+> 💾 Los datos (sobre todo `battle_ai_summaries`) son **caros de regenerar**. Usa
+> `./backend/scripts/db-backup.sh` con frecuencia. Ver `docs/backend/backups.md`.
 
-Por defecto `AI_PROVIDER=mock`: la IA genera plantillas locales, **sin coste ni
-red**. Para probar con Claude de verdad, en tu `.env`:
+### IA — *Zero Real-Time Generation*
+
+El LLM **nunca** se invoca dentro de una petición HTTP. El endpoint
+`GET /battles/:id/ai-story` devuelve la narrativa **pre-generada** o
+`{ status: "unavailable" }` si aún no existe. El contenido lo producen procesos en
+segundo plano (cron diario, `pregen`, ingesta) mediante *workers* BullMQ que
+persisten el resultado en `BattleAISummary` (caché permanente).
+
+Por defecto `AI_PROVIDER=mock`: plantilla local, **sin coste ni red**. Para probar
+con Claude de verdad, en tu `.env`:
 
 ```env
 AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 AI_MODEL=claude-sonnet-4-6
 ```
-
-La generación corre siempre en background (cola `ai-generation` de BullMQ); nunca
-se invoca de forma síncrona en una petición de usuario.
 
 ---
 
@@ -173,7 +196,7 @@ se invoca de forma síncrona en una petición de usuario.
    [Conventional Commits](https://www.conventionalcommits.org/):
 
    ```
-   feat(battle): añade filtro por era en el mapa
+   feat(battle): añade filtro por siglo en el mapa
    fix(ai): evita re-encolar narrativas ya generadas
    docs: actualiza la guía de despliegue
    ```
@@ -186,8 +209,8 @@ se invoca de forma síncrona en una petición de usuario.
    ```
 
 4. Abre un Pull Request contra `main`. La
-   [CI de GitHub Actions](.github/workflows/ci.yml) ejecuta los tests del backend
-   automáticamente.
+   [CI de GitHub Actions](.github/workflows/ci.yml) ejecuta unitarias, e2e con
+   Postgres real, gate de build y escaneos de seguridad.
 
 ---
 
@@ -196,9 +219,10 @@ se invoca de forma síncrona en una petición de usuario.
 - **TypeScript estricto** en backend y frontend.
 - **Lint y formato**: ESLint + Prettier. El DevContainer ya formatea al guardar
   (`editor.formatOnSave`) y aplica fixes de ESLint.
-- **Backend**: arquitectura modular de NestJS por dominio
-  (`battle/`, `war/`, `commander/`, `ai/`, `ingestion/`, `auth/`). Cada módulo
-  con su `controller` / `service` / `repository` / `dto`.
+- **Backend**: arquitectura modular de NestJS por dominio. El dominio es
+  deliberadamente pequeño: `battle/` (+ `ai/`, `ingestion/`, `wikidata/`,
+  `health/`, `prisma/`). Guerras y comandantes se retiraron por baja fiabilidad
+  de los datos.
 - **Base de datos**: todo cambio de esquema pasa por una **migración de Prisma**
   (`npx prisma migrate dev`). No edites la base de datos a mano.
 - **IA**: la IA siempre es **pre-computada y cacheada** (`BattleAISummary`).
@@ -217,10 +241,11 @@ Tu `.env` se crea automáticamente desde `.env.example`. Revisa estas claves:
 
 | Variable | Necesaria para | Por defecto |
 |---|---|---|
-| `POSTGRES_*` | Conexión a la base de datos | ver `.env.example` |
-| `JWT_SECRET` | Firmar tokens | — |
+| `POSTGRES_*` / `DATABASE_URL` | Conexión a la base de datos | ver `.env.example` |
+| `REDIS_HOST` / `REDIS_PORT` | BullMQ / Redis | `localhost` / `6379` |
 | `AI_PROVIDER` | `mock` o `anthropic` | `mock` |
 | `ANTHROPIC_API_KEY` | Solo si `AI_PROVIDER=anthropic` | — |
+| `AI_MODEL` | Modelo de Claude a usar | `claude-sonnet-4-6` |
 | `AI_AUTO_QUEUE_MIN_SCORE` | Umbral de auto-encolado de IA | `80` |
 
 Nunca subas tu `.env` (está en `.gitignore`).
@@ -238,6 +263,9 @@ Si algo se rompe o cambian las dependencias:
   ```bash
   docker compose down -v
   ```
+
+  > ⚠️ Esto borra la base de datos. Haz antes `./backend/scripts/db-backup.sh` si
+  > tienes narrativas de IA que no quieras regenerar.
 
 ---
 

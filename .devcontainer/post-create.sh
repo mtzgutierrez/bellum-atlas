@@ -2,7 +2,7 @@
 # Se ejecuta una vez tras crear el DevContainer.
 set -euo pipefail
 
-echo "▶ Battle Atlas · configurando el entorno de desarrollo…"
+echo "▶ Bellum Atlas · configurando el entorno de desarrollo…"
 
 # .env a partir de la plantilla si todavía no existe.
 if [ ! -f /workspace/.env ]; then
@@ -25,6 +25,7 @@ cd /workspace/backend
 npx prisma migrate deploy || echo "  ⚠ migrate deploy falló (¿Postgres aún arrancando?). Ejecútalo a mano más tarde."
 
 echo "✅ Entorno listo."
-echo "   Backend:  cd backend && npm run start:dev   → http://localhost:3000"
-echo "   Frontend: ya corriendo en                   → http://localhost:5173"
-echo "   Seed:     cd backend && npx ts-node src/cli.ts demo"
+echo "   Backend:  cd backend && npm run start:dev          → http://localhost:3000"
+echo "   Frontend: ya corriendo en                          → http://localhost:5173"
+echo "   Seed:     cd backend && npm run seed               (3 batallas de arranque)"
+echo "   Ingesta:  cd backend && npm run ingest -- top-battles"
