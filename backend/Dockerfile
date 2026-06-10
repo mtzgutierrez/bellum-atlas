@@ -34,7 +34,14 @@ RUN npm run build
 RUN npm prune --production
 
 # Production stage
-FROM node:24-alpine AS production
+# node:24-slim (Debian) en vez de alpine: comparte libc (glibc) con la etapa
+# `build`, así el schema-engine nativo de Prisma —el que usa `migrate deploy`—
+# copiado en node_modules es compatible y funciona. Prisma necesita openssl.
+FROM node:24-slim AS production
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -45,6 +52,11 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package*.json ./
+# Necesarios para `prisma migrate deploy` en el deploy: schema + migraciones y la
+# config (que aporta datasource.url desde DATABASE_URL; el schema.prisma no la
+# define). Sin esto Prisma falla con "Could not find Prisma Schema".
+COPY --from=build --chown=node:node /app/prisma ./prisma
+COPY --from=build --chown=node:node /app/prisma.config.ts ./prisma.config.ts
 
 EXPOSE 3000
 
