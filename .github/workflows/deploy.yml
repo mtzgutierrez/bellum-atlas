@@ -23,6 +23,10 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: read # para que el server haga `docker pull` de GHCR con GITHUB_TOKEN
+
 jobs:
   deploy:
     environment: production
@@ -35,14 +39,21 @@ jobs:
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
+        env:
+          # Forwardeamos credenciales de GHCR y el tag a desplegar al script
+          # remoto. GITHUB_TOKEN basta para `docker pull` (permiso packages:read).
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
+          envs: REGISTRY_USER,REGISTRY_TOKEN,IMAGE_TAG
           script: |
             set -euo pipefail
-            cd ~/ares-codex
+            cd ~/bellum-atlas
 
             # Trae main exactamente como está en el remoto (descarta cualquier
             # cambio local del servidor; el .env de prod está gitignored y no se
@@ -50,12 +61,19 @@ jobs:
             git fetch --all --prune
             git reset --hard origin/main
 
-            # Reconstruye y levanta el stack de producción.
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+            # Autenticación en GHCR para poder descargar las imágenes privadas.
+            echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
+
+            # Descarga las imágenes ya construidas en CI (NO se compila aquí) y
+            # levanta el stack. IMAGE_TAG fija el SHA exacto desplegado.
+            export IMAGE_TAG
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             # Aplica migraciones pendientes (no resetea datos).
             docker compose -f docker-compose.yml -f docker-compose.prod.yml \
               exec -T backend npx prisma migrate deploy
 
-            # Libera espacio de imágenes viejas.
+            # Cierra sesión y libera espacio de imágenes viejas.
+            docker logout ghcr.io
             docker image prune -f
