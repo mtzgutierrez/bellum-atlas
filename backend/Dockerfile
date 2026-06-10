@@ -38,9 +38,13 @@ FROM node:24-alpine AS production
 
 WORKDIR /app
 
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package*.json ./
+# --chown=node:node: en producción arrancamos como USER node, y comandos como
+# `prisma migrate deploy` necesitan escribir en node_modules/@prisma/engines.
+# Sin esto los archivos quedan en propiedad de root y Prisma crashea con
+# "Can't write to /app/node_modules/@prisma/engines".
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package*.json ./
 
 EXPOSE 3000
 
