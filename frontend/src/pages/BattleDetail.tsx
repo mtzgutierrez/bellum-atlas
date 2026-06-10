@@ -101,15 +101,19 @@ function Detail({ battle }: { battle: BattleDetail }) {
       </header>
 
       {battle.summary ? (
-        <div className="detail-intro">
-          <div className="detail-intro-media">
-            <SmartImage
-              src={battle.imageUrl}
-              alt={battle.name}
-              type={battle.type}
-              label={typeLabel}
-            />
-          </div>
+        // En la ficha, si no hay imagen simplemente se oculta (sin placeholder):
+        // la síntesis pasa a ancho completo.
+        <div className={`detail-intro${battle.imageUrl ? '' : ' detail-intro--full'}`}>
+          {battle.imageUrl && (
+            <div className="detail-intro-media">
+              <SmartImage
+                src={battle.imageUrl}
+                alt={battle.name}
+                type={battle.type}
+                label={typeLabel}
+              />
+            </div>
+          )}
           <section className="detail-intro-synthesis">
             <div className="detail-outcome-eyebrow">Síntesis</div>
             <div className="detail-outcome-body">
@@ -119,7 +123,7 @@ function Detail({ battle }: { battle: BattleDetail }) {
             </div>
           </section>
         </div>
-      ) : (
+      ) : battle.imageUrl ? (
         <div className="detail-hero-media">
           <SmartImage
             src={battle.imageUrl}
@@ -128,7 +132,7 @@ function Detail({ battle }: { battle: BattleDetail }) {
             label={typeLabel}
           />
         </div>
-      )}
+      ) : null}
 
       <BattleArticleSection slug={battle.slug} summary={battle.summary} />
 

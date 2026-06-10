@@ -87,7 +87,7 @@ async function runTarget(
   opts: IngestOptions,
 ): Promise<void> {
   if (target.mode === 'battle') {
-    await ingestion.ingestBattle(target.qid, opts);
+    await ingestion.ingestBattle(target.qid);
     return;
   }
   if (target.mode === 'top-battles') {
