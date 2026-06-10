@@ -9,9 +9,7 @@ on:
 permissions:
   contents: read
   checks: write
-  actions: read # codeql-action consulta el workflow-run vía API (get-a-workflow-run)
   pull-requests: read # gitleaks-action lista los commits del PR vía API en eventos pull_request
-  security-events: write # para subir SARIF (CodeQL / Trivy) a la pestaña Security
 
 # Cancela ejecuciones en vuelo de la misma PR o rama cuando llega un commit nuevo.
 concurrency:
@@ -183,24 +181,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # SAST de JS/TS → pestaña Security.
-      - name: CodeQL · init
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript-typescript
-      - name: CodeQL · analyze
-        uses: github/codeql-action/analyze@v3
-
-      # Vulnerabilidades de deps + IaC/Dockerfile → SARIF.
+      # Vulnerabilidades de deps + IaC/Dockerfile. El code scanning (SARIF en la
+      # pestaña Security) requiere GitHub Advanced Security, no disponible en repos
+      # privados de cuenta individual, así que Trivy actúa como gate por exit-code:
+      # falla el job si encuentra HIGH/CRITICAL.
       - name: Trivy · filesystem
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          format: sarif
-          output: trivy.sarif
+          format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-      - name: Trivy · upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy.sarif
+          exit-code: '1'
