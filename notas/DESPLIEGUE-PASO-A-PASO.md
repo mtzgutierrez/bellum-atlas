@@ -194,7 +194,7 @@ BUILD_TARGET=production
 
 POSTGRES_DB=arescodex
 POSTGRES_USER=arescodex
-POSTGRES_PASSWORD=<openssl rand -base64 32>
+POSTGRES_PASSWORD=<openssl rand -hex 32>   # hex: URL-safe, no rompe DATABASE_URL
 
 AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...          # ¡pon límite de gasto en console.anthropic.com!
