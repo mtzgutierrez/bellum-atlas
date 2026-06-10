@@ -111,7 +111,10 @@ img { display: block; }
   gap: var(--space-8);
   position: sticky;
   top: 0;
-  z-index: 50;
+  /* Por encima de los controles y overlays de Leaflet (llegan a z-index 1000),
+     si no el menú hamburguesa desplegable —que cuelga del stacking context del
+     topbar— queda DETRÁS del mapa en móvil. */
+  z-index: 1100;
 }
 .topbar-brand {
   display: flex; align-items: center; gap: var(--space-3);
