@@ -9,7 +9,7 @@ export default function Logo({ size = 18 }: LogoProps) {
         <path d="M3 21l4-4M21 3l-4 4M14 7l3 3-9 9-3 1 1-3 9-9zM7 17l-3 3 1-3z" />
       </svg>
       <span className="ax-display" style={{ fontSize: 14, letterSpacing: '0.18em', color: 'var(--color-text-primary)' }}>
-        ARES<span style={{ color: 'var(--color-gold-bright)' }}>·</span>CODEX
+        BELLUM<span style={{ color: 'var(--color-gold-bright)' }}>·</span>ATLAS
       </span>
     </div>
   )

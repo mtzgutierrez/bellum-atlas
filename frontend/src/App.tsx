@@ -1,26 +1,36 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import Home from './pages/Home'
-import Catalog from './pages/Catalog'
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
+import SiteFooter from './components/SiteFooter'
+import TopBar from './components/TopBar'
+import About from './pages/About'
 import BattleDetail from './pages/BattleDetail'
-import Wars, { WarDetailDesktop } from './pages/Wars'
-import Timeline from './pages/Timeline'
-import Commanders, { CommanderDetailDesktop } from './pages/Commanders'
+import Battles from './pages/Battles'
+import Home from './pages/Home'
 import MapExplorer from './pages/MapExplorer'
+import Timeline from './pages/Timeline'
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/battles" element={<Catalog />} />
-        <Route path="/battles/:id" element={<BattleDetail />} />
-        <Route path="/wars" element={<Wars />} />
-        <Route path="/wars/:id" element={<WarDetailDesktop />} />
-        <Route path="/commanders" element={<Commanders />} />
-        <Route path="/commanders/:id" element={<CommanderDetailDesktop />} />
-        <Route path="/timeline" element={<Timeline />} />
-        <Route path="/map" element={<MapExplorer />} />
-      </Routes>
+      <TopBar />
+      <div className="shell">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/map" element={<MapExplorer />} />
+          <Route path="/battles" element={<Battles />} />
+          <Route path="/battles/:id" element={<BattleDetail />} />
+          <Route path="/timeline" element={<Timeline />} />
+          <Route path="/about" element={<About />} />
+        </Routes>
+      </div>
+      <FooterSlot />
     </BrowserRouter>
   )
+}
+
+// El footer aparece en todas las páginas de contenido, pero NO en el mapa, que
+// ocupa el alto completo de la ventana.
+function FooterSlot() {
+  const { pathname } = useLocation()
+  if (pathname === '/map') return null
+  return <SiteFooter />
 }

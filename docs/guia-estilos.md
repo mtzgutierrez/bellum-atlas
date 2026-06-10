@@ -1,10 +1,10 @@
-# Guía de Estilos — AresCodex
+# Guía de Estilos — Bellum Atlas
 
-> La guerra no es gloriosa. Pero tampoco es solo desolación. Es las dos cosas a la vez, y esa tensión es lo que AresCodex debe transmitir.
+> La guerra no es gloriosa. Pero tampoco es solo desolación. Es las dos cosas a la vez, y esa tensión es lo que Bellum Atlas debe transmitir.
 
 Esta guía no es una lista de tokens de diseño. Es un sistema de decisiones visuales que nace de una pregunta central: **¿cómo se siente pararse delante de un mapa de batallas históricas?**
 
-Se siente peso. Se siente escala. Se siente el frío de las cifras de bajas y también la grandeza de los que las protagonizaron. AresCodex debe capturar exactamente eso.
+Se siente peso. Se siente escala. Se siente el frío de las cifras de bajas y también la grandeza de los que las protagonizaron. Bellum Atlas debe capturar exactamente eso.
 
 ---
 
@@ -167,7 +167,7 @@ Tres fuentes, tres roles distintos. Ninguna es intercambiable.
 
 ### Principio de densidad controlada
 
-Los documentos militares son densos. Un despacho de campo no tiene márgenes generosos. AresCodex hereda parte de esa densidad: la información debe estar presente, disponible, sin desperdiciar espacio.
+Los documentos militares son densos. Un despacho de campo no tiene márgenes generosos. Bellum Atlas hereda parte de esa densidad: la información debe estar presente, disponible, sin desperdiciar espacio.
 
 Pero hay momentos de silencio. El mapa a pantalla completa. El nombre de la batalla en solitario sobre el fondo negro antes de que cargue el resto de la ficha. Esos momentos de vacío son intencionales y dan más peso a lo que los rodea.
 
@@ -175,7 +175,7 @@ Pero hay momentos de silencio. El mapa a pantalla completa. El nombre de la bata
 
 ### Border radius
 
-Los elementos de AresCodex no son redondeados. Las esquinas cuadradas reflejan el metal, la piedra, el ángulo recto de los planos de batalla.
+Los elementos de Bellum Atlas no son redondeados. Las esquinas cuadradas reflejan el metal, la piedra, el ángulo recto de los planos de batalla.
 
 ```css
 --radius-none: 0px    /* cards, badges de resultado, botones primarios */
@@ -318,7 +318,7 @@ El diseño visual solo es la mitad. El texto también porta la sensación.
 
 **Sobrio, no frío.** Los datos se presentan sin dramatismo artificial, pero tampoco se deshumanizan. Una cifra de bajas no es un número de filas en una base de datos: es una consecuencia histórica.
 
-**Sin jerga de producto.** AresCodex no tiene "features", tiene capacidades. No hay "onboarding", hay una primera visita. El vocabulario es el de un archivo histórico, no el de una startup.
+**Sin jerga de producto.** Bellum Atlas no tiene "features", tiene capacidades. No hay "onboarding", hay una primera visita. El vocabulario es el de un archivo histórico, no el de una startup.
 
 ### Ejemplos de microcopy
 
@@ -383,7 +383,7 @@ Explicitarlo es tan importante como lo que acepta.
 | Gradientes de fondo complejos | El diseño oscuro plano ya tiene profundidad por contraste |
 | Tipografía en minúsculas para titulares | Cinzel requiere mayúsculas; las minúsculas rompen la coherencia |
 | Emojis en la interfaz de datos | Los emojis en números de bajas son una falta de respeto al contenido |
-| Texto motivacional o gamificación | AresCodex no da puntos ni logros; documenta la historia |
+| Texto motivacional o gamificación | Bellum Atlas no da puntos ni logros; documenta la historia |
 
 ---
 

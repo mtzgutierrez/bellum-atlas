@@ -30,7 +30,9 @@ export default function Icon({ name, size = 16, color = 'currentColor', strokeWi
     case 'filter': return <svg {...props}><path d="M3 5h18M6 12h12M10 19h4"/></svg>
     case 'sliders': return <svg {...props}><path d="M4 6h7M15 6h5M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="13" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>
     case 'arrow-right': return <svg {...props}><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    case 'arrow-left': return <svg {...props}><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
     case 'arrow-down': return <svg {...props}><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+    case 'crosshair': return <svg {...props}><circle cx="12" cy="12" r="9"/><path d="M22 12h-4M6 12H2M12 6V2M12 22v-4"/></svg>
     case 'chevron-right': return <svg {...props}><path d="M9 6l6 6-6 6"/></svg>
     case 'chevron-down': return <svg {...props}><path d="M6 9l6 6 6-6"/></svg>
     case 'plus': return <svg {...props}><path d="M12 5v14M5 12h14"/></svg>

@@ -7,13 +7,12 @@ services:
     profiles:
       - manual
     image: dpage/pgadmin4:latest
-    container_name: ares_codex_app_pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: raulmartinezz402@gmail.com
       PGADMIN_DEFAULT_PASSWORD: raul
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
-      - "5050:80"
+      - "5051:80"
     networks:
       - app-network
     depends_on:
@@ -41,19 +40,10 @@ services:
       API_TARGET: "http://backend:3000"
     command: npm run dev -- --host
 
-  scraper:
-    profiles:
-      - manual
-    volumes:
-      - ./scraper:/app
-    working_dir: /app/ares
-    environment:
-      ENV: development
 
   # ─── Docs ────────────────────────────────────────────────
   docs:
     image: python:3.13-slim
-    container_name: ares_codex_app_docs
     working_dir: /docs
     volumes:
       - .:/docs
@@ -70,7 +60,6 @@ services:
     profiles:
       - manual
     image: postgres:18.1-alpine
-    container_name: ares_codex_app_sonar_postgres
     environment:
       POSTGRES_DB: sonar
       POSTGRES_USER: sonar
@@ -89,7 +78,6 @@ services:
     profiles:
       - manual
     image: sonarqube:community
-    container_name: ares_codex_app_sonarqube
     depends_on:
       sonar-db:
         condition: service_healthy

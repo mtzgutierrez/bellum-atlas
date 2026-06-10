@@ -1,0 +1,61 @@
+name: DAST (ZAP)
+
+# Escaneo dinámico contra la app real. Es lento y puede dar hallazgos "ruidosos"
+# (cabeceras, Swagger expuesto…), así que NO bloquea PRs: corre de noche y bajo
+# demanda, y abre un issue con el informe.
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write # ZAP abre/actualiza un issue con los hallazgos
+
+jobs:
+  zap-baseline:
+    name: ZAP baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Levanta el backend de PRODUCCIÓN (lo que se despliega) con un override que
+      # publica el puerto 3000 para que ZAP, que corre en el host, lo alcance.
+      - name: Levantar stack (prod)
+        run: |
+          cat > .env <<'EOF'
+          NODE_ENV=production
+          BUILD_TARGET=production
+          COMPOSE_PROJECT_NAME=bellum_dast
+          POSTGRES_DB=bellum
+          POSTGRES_USER=bellum
+          POSTGRES_PASSWORD=bellum
+          POSTGRES_PORT=5432
+          POSTGRES_HOST=postgres
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          AI_PROVIDER=mock
+          VITE_API_URL=http://localhost:3000
+          FRONTEND_PORT=5173
+          EOF
+          cat > docker-compose.ci-ports.yml <<'EOF'
+          services:
+            backend:
+              ports:
+                - "3000:3000"
+          EOF
+          docker compose -f docker-compose.yml -f docker-compose.ci-ports.yml up -d --build postgres redis backend
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:3000/health && break || sleep 3
+          done
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:3000'
+          fail_action: false # informativo: no rompe el build
+          allow_issue_writing: true
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci-ports.yml down -v

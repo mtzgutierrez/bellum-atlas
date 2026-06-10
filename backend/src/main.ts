@@ -7,13 +7,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const config = new DocumentBuilder()
-    .setTitle('AresCodex API')
+    .setTitle('Bellum Atlas API')
     .setDescription(
       'Atlas histórico interactivo de conflictos militares.\n\n' +
-        'Los endpoints de `/internal/scraper/*` requieren el header `x-api-key`.',
+        'La narrativa por IA (`GET /battles/:id/ai-story`) es abierta a todos: ' +
+        'devuelve el contenido pre-generado o `unavailable` si aún no existe.',
     )
     .setVersion('1.0')
-    .addApiKey({ type: 'apiKey', in: 'header', name: 'x-api-key' }, 'x-api-key')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

@@ -1,96 +1,40 @@
 # Páginas
 
-Cada página existe en dos variantes: `Desktop` y `Mobile`. El componente raíz detecta `window.innerWidth < 768` y renderiza la variante correspondiente.
+La app (React + Vite) tiene cuatro vistas. La navegación superior es:
+**Inicio · Mapa · Batallas**, más el toggle Free/Premium.
 
 ---
 
-## Home (`/`)
+## Inicio (`/`)
 
-El hero ocupa 540px de altura, fondo de grabado con soldados-silueta SVG y degradado de humo. La batalla del día (Lepanto) se muestra con tipografía Cinzel a 96px en dos líneas, con el nombre final en dorado.
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  TopBar (compact, blur)                                 │
-├─────────────────────────────────────────────────────────┤
-│  [HERO 540px — engraving + siluetas + humo]             │
-│  · Despacho del día stamp                               │
-│  · ResultBadge + metadata mono                          │
-│  · BATALLA DE / LEPANTO (96px Cinzel, gold)             │
-│  · Descripción · CTA primario · stats inline            │
-│  · Flechas de paginación                                │
-├─────────────────────────────────────────────────────────┤
-│  [CONTADORES — 88px Cinzel: 5.247 / 412 / 193 / 3.235] │
-├─────────────────────────────────────────────────────────┤
-│  [ENTRY POINTS — grid 1.4fr / 1fr / 1fr]               │
-│  · Map Explorer (MapBackdrop + pins)                    │
-│  · Catálogo (preview de búsquedas)                      │
-│  · Cronología (preview de siglos)                       │
-└─────────────────────────────────────────────────────────┘
-```
-
----
+Hero de entrada + rejilla de batallas destacadas (las de mayor
+`importanceScore`), cada una con su imagen. CTA al mapa y al catálogo.
 
 ## Catálogo (`/battles`)
 
-Búsqueda full-text reactiva (sin debounce, filtra sobre los datos mock) con sidebar de filtros por era, tipo y resultado.
-
-- Input de búsqueda: filtra `name`, `war`, `place`
-- Sidebar 240px: checkboxes con contadores (sin bordes redondeados)
-- Resultados: columna de `BattleCard` completas con borde izquierdo de color
-- Estados: lista vacía con mensaje de orientación
-
----
+Listado paginado de batallas con:
+- Búsqueda por nombre (con debounce).
+- Filtro por época (presets de ≤150 años).
+- Tarjetas `BattleCard` con imagen, tipo y año.
 
 ## Ficha de batalla (`/battles/:id`)
 
-Carga la batalla por `id` del array mock. Si no existe, muestra Stalingrado como fallback.
-
-**Secciones:**
-
-1. **Breadcrumb** → Batallas → [guerra] → [batalla]
-2. **Hero** (2 col): título 64px + metadata | mini-mapa MapBackdrop con pin central
-3. **Stats strip** (5 col): efectivos, bajas, ubicación, era, resultado
-4. **Facciones** (3 col): FactionColumn izquierda | divider con VS | FactionColumn derecha alineada a la derecha
-5. **Batallas relacionadas**: grid 3 col de BattleCard compact, filtradas por `war`
-
----
-
-## Guerras (`/wars` y `/wars/:id`)
-
-**Lista:** tabla con columnas nombre / periodo | batallas | bajas | chevron. Clickable a la ficha.
-
-**Ficha:** header 2 col (título + tabla de stats) + sección de batallas filtradas por `war.name`.
-
----
-
-## Cronología (`/timeline`)
-
-Línea dorada vertical con grupos por siglo. Cada grupo tiene:
-
-- Dot dorado en la línea
-- Header: siglo + línea divisoria + contador de batallas
-- Grid 3 col de BattleCard compact
-
-Siglos incluidos: s. V a. C., s. III a. C., s. VIII, s. XV, s. XVI, s. XIX, s. XX.
-
----
-
-## Comandantes (`/commanders` y `/commanders/:id`)
-
-**Lista:** grid 4 col con tarjetas: retrato (ax-engraving placeholder), nombre, país, años, stats V/D/Total.
-
-**Perfil:** layout 2 col — retrato 200px | datos completos con ratio de efectividad + arco de carrera (puntos sobre línea). Grid de batallas relacionadas abajo.
-
----
+La vista más rica, pensada para enganchar al invitado **sin** cuenta:
+1. **Cabecera**: tipo, título, año/rango, coordenadas y enlace "Ver en el mapa".
+2. **Imagen** grande (de Wikipedia).
+3. **Síntesis**: el extract de Wikipedia.
+4. **Ubicación**: mini-mapa Leaflet centrado en la batalla.
+5. **Narrativa por IA (Premium)**: si el usuario es premium, pestañas
+   *Story Mode / Contexto / Resultado / Curiosidades*; si es invitado/free, un
+   teaser atractivo con CTA "Activar Premium". Ver [IA (LLM)](../backend/ia.md).
+6. **Batallas de la misma época**: rejilla de batallas en ±20 años.
+7. Enlace al artículo completo de Wikipedia.
 
 ## Map Explorer (`/map`)
 
-Mapa full-screen `MapBackdrop` con:
-
-- Pins posicionados manualmente mediante `pinPositions` (coordenadas % del viewport)
-- Clusters fijos decorativos (x2)
-- Barra de filtros flotante centrada en la parte superior (Todos / Victorias / Derrotas / Indeciso)
-- Stats flotantes en esquina superior derecha
-- Leyenda flotante en esquina inferior izquierda
-- Popup al hacer clic en un pin: nombre, fecha, lugar, fuerzas, ResultBadge, tail triangular
-- Click fuera del popup para cerrarlo
+Mapa Leaflet a pantalla completa con tiles oscuros de Carto:
+- Carga puntos ligeros (`/battles/points`) dentro de una **ventana temporal de
+  150 años** (por defecto, los últimos 150).
+- Slider de periodo (doble) que nunca abre más de 150 años.
+- Búsqueda por nombre y lista de resultados; doble clic abre la ficha.
+- Popups con nombre, año y tipo.

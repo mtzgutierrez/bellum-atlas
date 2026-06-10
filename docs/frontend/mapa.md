@@ -1,81 +1,43 @@
 # Map Explorer
 
-**Ruta**: `/map`
+**Ruta**: `/map` · Componente: `pages/MapExplorer.tsx`
 
-El mapa es una representación topográfica generada íntegramente con CSS y SVG — sin dependencias de Mapbox, Leaflet ni tiles externos. Está preparado para conectar con datos reales y una librería de mapas real en v2.
-
----
-
-## Implementación actual (MVP)
-
-### MapBackdrop
-
-Componente `MapBackdrop.tsx` que construye el fondo con:
-
-- `background-image` multicapa de `radial-gradient` para simular terreno y vegetación
-- `repeating-radial-gradient` para curvas de nivel topográficas
-- SVG superpuesto con paths de coastlines estilizadas (opacidad 0.5)
-- Grid de coordenadas opcional (CSS `linear-gradient` a 60px × 60px)
-
-### Pins y clusters
-
-- `MapPin`: círculo posicionado con `left/top` en porcentaje del contenedor. Color codificado por resultado (gold/crimson/blue/orange). Efecto de brillo con `box-shadow`.
-- `MapCluster`: círculo con contador y anillo exterior translúcido.
-- Las posiciones son coordenadas de viewport manuales en `pinPositions` (Record en `MapExplorer.tsx`).
-
-### Interacción
-
-```
-Click en pin → setSelected(battle) → popup posicionado sobre el pin
-Click fuera  → setSelected(null) → popup se cierra
-Filtro       → setFilter(result) → solo se renderizan pins del resultado seleccionado
-```
+Mapa interactivo con **Leaflet** y tiles oscuros de **CARTO** (sin token ni
+coste). Muestra las batallas como marcadores dentro de una ventana temporal.
 
 ---
 
-## Flujo de datos futuro (v2)
+## Cómo funciona
 
-```mermaid
-graph LR
-    API["GET /battles/map?result=victory"] --> STORE["React Query cache"]
-    STORE --> SC["Supercluster (npm)"]
-    SC --> PINS["Pins individuales"]
-    SC --> GRUPOS["Círculos de cluster con contador"]
-    PINS --> POPUP["Popup: nombre, fecha, resultado, CTA"]
-    POPUP --> LINK["Link a /battles/:id"]
-```
+- **Datos**: `GET /battles/points` (puntos ligeros, capado a 10.000 en backend).
+  Se piden filtrando por una **ventana de 150 años** (por defecto, los últimos
+  150) y, opcionalmente, por nombre.
+- **Ventana temporal**: un slider doble (`DualRange`) que **nunca abre más de
+  150 años** — desliza la ventana en vez de ampliarla. Esto evita cargas
+  masivas (ver [límite de años](../backend/api.md)).
+- **Marcadores**: un pin por batalla; al hacer clic se abre un popup con
+  nombre, año y tipo, y un enlace a la ficha.
+- **Lista lateral**: resultados de la ventana actual; doble clic abre la ficha.
+- **Foco**: `/map?focus=<slug>` centra el mapa en una batalla concreta (lo usa
+  el botón "Ver en el mapa" de la ficha).
 
-### Endpoint objetivo
+---
 
-```
-GET /battles/map?era=contemporary&result=victory
-```
+## Mini-mapa de la ficha
 
-```json
-[
-  {
-    "id": "stalingrado",
-    "name": "Batalla de Stalingrado",
-    "lat": 48.708,
-    "lon": 44.513,
-    "result": "victory",
-    "date": "1943-02-02",
-    "war": "Segunda Guerra Mundial"
-  }
-]
-```
+`components/BattleMiniMap.tsx` reutiliza Leaflet y los mismos tiles para
+mostrar, dentro de la ficha de cada batalla, un mapa pequeño no interactivo
+centrado en su ubicación.
 
 ---
 
 ## Roadmap del mapa
 
-| Feature | Versión |
+| Feature | Estado |
 |---|---|
-| SVG backdrop estático | MVP ✓ |
-| Pins con filtros por resultado | MVP ✓ |
-| Popup de batalla | MVP ✓ |
-| Tiles reales (Mapbox/MapLibre) | v2 |
-| Clustering con Supercluster | v2 |
-| Filtro por era con slider | v2 |
-| Heatmap de densidad | v3 |
-| Animación de movimientos | v3 |
+| Mapa Leaflet + tiles CARTO | ✓ |
+| Ventana temporal de 150 años | ✓ |
+| Popup + enlace a ficha | ✓ |
+| Foco por slug (`?focus=`) | ✓ |
+| Clustering (markercluster) al hacer zoom out | pendiente |
+| Carga por bounding box al mover el mapa | pendiente |

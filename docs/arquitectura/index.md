@@ -1,6 +1,8 @@
 # Arquitectura — Visión general
 
-AresCodex sigue una arquitectura de **tres servicios desacoplados** que se comunican mediante HTTP. Ningún servicio escribe directamente en la base de datos de otro: toda inserción de datos pasa por la API del backend.
+Bellum Atlas son **dos servicios** (backend y frontend) más la infraestructura
+(PostgreSQL + Redis). Los datos se cargan por **ingesta** desde Wikidata y
+Wikipedia mediante un comando CLI del backend; no hay scraper aparte.
 
 ---
 
@@ -8,31 +10,36 @@ AresCodex sigue una arquitectura de **tres servicios desacoplados** que se comun
 
 ```mermaid
 graph TD
-    W[Wikipedia] -->|HTTP| S[Scraper Python/Scrapy]
-    S -->|POST /internal/scraper/battle| B[Backend NestJS]
-    B -->|Prisma ORM| DB[(PostgreSQL + PostGIS)]
-    B -->|Cache| R[(Redis)]
+    WD[Wikidata SPARQL] -->|ingesta CLI| B[Backend NestJS]
+    WP[Wikipedia REST] -->|extract + imagen| B
+    B -->|Prisma ORM| DB[(PostgreSQL)]
+    B -->|colas BullMQ| R[(Redis)]
+    B -->|worker IA| LLM[LLM mock / Claude]
     F[Frontend React] -->|REST API| B
-    F -->|Tiles| M[Mapbox GL JS]
+    F -->|tiles| Carto[CARTO/OSM]
 ```
 
 ---
 
 ## Principios de diseño
 
-### Separación de responsabilidades
-El scraper extrae, el backend valida y persiste, el frontend presenta. Ningún servicio mezcla responsabilidades. Esto permite escalar o reemplazar cualquier capa sin tocar las demás.
+### Zero Real-Time Generation (IA)
+El LLM **nunca** se llama dentro de una request del usuario. La narrativa se
+precomputa en background con workers (BullMQ) y se cachea de forma permanente.
+Ver [IA (LLM)](../backend/ia.md).
 
-### Arquitectura preparada para el futuro
-El modelo de datos está diseñado para que features post-MVP (IA, colecciones, workspace, exportación) se añadan como modelos nuevos o campos opcionales, sin migraciones destructivas.
+### Modelo simple
+Una sola entidad de dominio (`Battle`) + el caché de IA. Sin guerras ni
+comandantes. Ver [Modelo de datos](modelo-datos.md).
 
-### Sin escritura directa a la base de datos
-El scraper nunca conecta directamente con PostgreSQL. Toda inserción pasa por `POST /internal/scraper/battle`, donde el backend aplica validación, deduplicación y normalización centralizadas.
+### Carga acotada
+Las consultas por años se limitan a ventanas de **150 años** para no devolver
+miles de batallas de golpe.
 
 ---
 
 ## Secciones de arquitectura
 
-- [Stack tecnológico](stack.md) — Tecnologías elegidas y justificación
-- [Modelo de datos](modelo-datos.md) — Entidades Prisma y sus relaciones
-- [Flujo de datos](flujo-datos.md) — De Wikipedia a la pantalla del usuario
+- [Stack tecnológico](stack.md)
+- [Modelo de datos](modelo-datos.md)
+- [Flujo de datos](flujo-datos.md)

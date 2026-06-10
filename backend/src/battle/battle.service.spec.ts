@@ -1,187 +1,105 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { BattleService } from './battle.service';
 import { BattleRepository } from './battle.repository';
+import * as wikipediaSource from '../ai/wikipedia-source';
 
-jest.mock('@prisma/client', () => ({
-  BattleType: { LAND: 'LAND', NAVAL: 'NAVAL', AIR: 'AIR', SIEGE: 'SIEGE', MIXED: 'MIXED' },
-  PrismaClient: jest.fn(),
-}));
-
-// ─── Stubs ────────────────────────────────────────────────────────────────────
-
-const ERA_STUB = { name: 'Edad Contemporánea', slug: 'contemporary' };
-const LOCATION_STUB = { name: 'Waterloo', country: 'Bélgica', lat: 50.68, lon: 4.41 };
-
-const BATTLE_STUB = {
-  id: 'battle-1',
-  name: 'Batalla de Waterloo',
-  slug: 'batalla-de-waterloo',
-  date: new Date('1815-06-18'),
-  dateText: '18 de junio de 1815',
-  result: 'victory',
-  type: 'LAND',
-  wikipediaUrl: 'https://es.wikipedia.org/wiki/Batalla_de_Waterloo',
-  eraId: 'era-1',
-  locationId: 'loc-1',
-  createdAt: new Date('2025-01-01'),
-  updatedAt: new Date('2025-01-01'),
-  era: ERA_STUB,
-  location: LOCATION_STUB,
-  wars: [{ warId: 'war-1', war: { id: 'war-1', name: 'Guerra de los Cien Días', slug: 'guerra-cien-dias' } }],
-  factions: [],
-  media: [],
-};
-
-// ─── Mock factory ─────────────────────────────────────────────────────────────
-
-function buildMockRepository() {
-  return {
-    findAll: jest.fn(),
-    findByIdOrSlug: jest.fn(),
-    findRelated: jest.fn(),
-  };
-}
-
-// ─── Suite ────────────────────────────────────────────────────────────────────
+jest.mock('../ai/wikipedia-source');
 
 describe('BattleService', () => {
   let service: BattleService;
-  let repo: ReturnType<typeof buildMockRepository>;
+  let repo: jest.Mocked<
+    Pick<
+      BattleRepository,
+      'findArticleSource' | 'saveArticle' | 'findPaginated' | 'count'
+    >
+  >;
+  const fetchArticleText = wikipediaSource.fetchArticleText as jest.Mock;
 
-  beforeEach(async () => {
-    repo = buildMockRepository();
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        BattleService,
-        { provide: BattleRepository, useValue: repo },
-      ],
-    }).compile();
-    service = module.get<BattleService>(BattleService);
+  beforeEach(() => {
+    repo = {
+      findArticleSource: jest.fn(),
+      saveArticle: jest.fn().mockResolvedValue(undefined),
+      findPaginated: jest.fn(),
+      count: jest.fn(),
+    } as never;
+    service = new BattleService(repo as unknown as BattleRepository);
+    fetchArticleText.mockReset();
   });
 
-  afterEach(() => jest.clearAllMocks());
+  describe('getArticle', () => {
+    it('devuelve cached:true sin tocar la red si ya hay artículo', async () => {
+      repo.findArticleSource.mockResolvedValue({
+        id: 'b1',
+        article: 'texto cacheado',
+        wikipediaUrl: 'https://es.wikipedia.org/wiki/X',
+      });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // findAll
-  // ═══════════════════════════════════════════════════════════════════════════
-  describe('findAll', () => {
-    it('happy: returns paginated battles with default params', async () => {
-      repo.findAll.mockResolvedValue([[BATTLE_STUB], 1]);
+      const res = await service.getArticle('b1');
 
-      const result = await service.findAll({});
-
-      expect(result.data).toHaveLength(1);
-      expect(result.meta).toEqual({ total: 1, page: 1, limit: 20, totalPages: 1 });
+      expect(res).toEqual({
+        article: 'texto cacheado',
+        sourceUrl: 'https://es.wikipedia.org/wiki/X',
+        cached: true,
+      });
+      expect(fetchArticleText).not.toHaveBeenCalled();
+      expect(repo.saveArticle).not.toHaveBeenCalled();
     });
 
-    it('happy: returns correct meta for multi-page results', async () => {
-      repo.findAll.mockResolvedValue([Array(20).fill(BATTLE_STUB), 45]);
+    it('hace backfill y persiste cuando no está cacheado', async () => {
+      repo.findArticleSource.mockResolvedValue({
+        id: 'b1',
+        article: null,
+        wikipediaUrl: 'https://es.wikipedia.org/wiki/X',
+      });
+      fetchArticleText.mockResolvedValue('texto nuevo');
 
-      const result = await service.findAll({ page: 1, limit: 20 });
+      const res = await service.getArticle('b1');
 
-      expect(result.meta.totalPages).toBe(3);
-      expect(result.meta.total).toBe(45);
+      expect(fetchArticleText).toHaveBeenCalledWith(
+        'https://es.wikipedia.org/wiki/X',
+        9000,
+      );
+      expect(repo.saveArticle).toHaveBeenCalledWith('b1', 'texto nuevo');
+      expect(res).toEqual({
+        article: 'texto nuevo',
+        sourceUrl: 'https://es.wikipedia.org/wiki/X',
+        cached: false,
+      });
     });
 
-    it('edge: empty result returns {data: [], meta: {total: 0}}', async () => {
-      repo.findAll.mockResolvedValue([[], 0]);
+    it('no persiste si el fetch no devuelve texto', async () => {
+      repo.findArticleSource.mockResolvedValue({
+        id: 'b1',
+        article: null,
+        wikipediaUrl: 'https://es.wikipedia.org/wiki/X',
+      });
+      fetchArticleText.mockResolvedValue(null);
 
-      const result = await service.findAll({});
+      const res = await service.getArticle('b1');
 
-      expect(result.data).toEqual([]);
-      expect(result.meta.total).toBe(0);
-      expect(result.meta.totalPages).toBe(0);
+      expect(repo.saveArticle).not.toHaveBeenCalled();
+      expect(res.article).toBeNull();
+      expect(res.cached).toBe(false);
     });
 
-    it('edge: limit is capped at 100', async () => {
-      repo.findAll.mockResolvedValue([[], 0]);
-
-      await service.findAll({ limit: 9999 });
-
-      const [, , take] = repo.findAll.mock.calls[0];
-      expect(take).toBe(100);
-    });
-
-    it('edge: page < 1 is normalised to 1', async () => {
-      repo.findAll.mockResolvedValue([[], 0]);
-
-      const result = await service.findAll({ page: -5 });
-
-      expect(result.meta.page).toBe(1);
-    });
-
-    it('edge: sortBy=name is forwarded to repository', async () => {
-      repo.findAll.mockResolvedValue([[BATTLE_STUB], 1]);
-
-      await service.findAll({ sortBy: 'name' });
-
-      const [dto] = repo.findAll.mock.calls[0];
-      expect(dto.sortBy).toBe('name');
-    });
-
-    it('error: DB error propagates as-is', async () => {
-      const boom = new Error('connection lost');
-      repo.findAll.mockRejectedValue(boom);
-
-      await expect(service.findAll({})).rejects.toBe(boom);
+    it('404 si la batalla no existe', async () => {
+      repo.findArticleSource.mockResolvedValue(null);
+      await expect(service.getArticle('nope')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // findOne
-  // ═══════════════════════════════════════════════════════════════════════════
-  describe('findOne', () => {
-    it('happy: finds battle by id and returns detail with relatedBattles', async () => {
-      repo.findByIdOrSlug.mockResolvedValue(BATTLE_STUB);
-      repo.findRelated.mockResolvedValue([]);
+  describe('list', () => {
+    it('combina data y meta con el total', async () => {
+      repo.findPaginated.mockResolvedValue([{ id: 'a' }] as never);
+      repo.count.mockResolvedValue(1);
 
-      const result = await service.findOne('battle-1') as any;
+      const res = await service.list({}, { page: 2, pageSize: 10 });
 
-      expect(result.id).toBe('battle-1');
-      expect(result.relatedBattles).toEqual([]);
-    });
-
-    it('happy: finds battle by slug', async () => {
-      repo.findByIdOrSlug.mockResolvedValue(BATTLE_STUB);
-      repo.findRelated.mockResolvedValue([]);
-
-      await service.findOne('batalla-de-waterloo');
-
-      expect(repo.findByIdOrSlug).toHaveBeenCalledWith('batalla-de-waterloo');
-    });
-
-    it('happy: includes related battles from same wars', async () => {
-      const related = { id: 'battle-2', name: 'Batalla de Ligny', slug: 'batalla-de-ligny', date: null, result: 'victory', type: 'LAND' };
-      repo.findByIdOrSlug.mockResolvedValue(BATTLE_STUB);
-      repo.findRelated.mockResolvedValue([related]);
-
-      const result = await service.findOne('battle-1') as any;
-
-      expect(result.relatedBattles).toHaveLength(1);
-      expect(result.relatedBattles[0].id).toBe('battle-2');
-    });
-
-    it('edge: battle with no wars returns empty relatedBattles without extra query', async () => {
-      repo.findByIdOrSlug.mockResolvedValue({ ...BATTLE_STUB, wars: [] });
-
-      const result = await service.findOne('battle-1') as any;
-
-      expect(result.relatedBattles).toEqual([]);
-      expect(repo.findRelated).not.toHaveBeenCalled();
-    });
-
-    it('error: throws NotFoundException when battle not found', async () => {
-      repo.findByIdOrSlug.mockResolvedValue(null);
-
-      await expect(service.findOne('ghost-id')).rejects.toBeInstanceOf(NotFoundException);
-    });
-
-    it('error: DB error on findByIdOrSlug propagates as-is', async () => {
-      const boom = new Error('timeout');
-      repo.findByIdOrSlug.mockRejectedValue(boom);
-
-      await expect(service.findOne('battle-1')).rejects.toBe(boom);
+      expect(repo.findPaginated).toHaveBeenCalledWith({}, 10, 10); // skip=(2-1)*10
+      expect(res.meta).toMatchObject({ total: 1, page: 2, pageSize: 10 });
+      expect(res.data).toHaveLength(1);
     });
   });
 });

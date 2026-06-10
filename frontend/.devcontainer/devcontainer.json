@@ -1,5 +1,5 @@
 {
-  "name": "Ares Codex App - Frontend (Vite + React)",
+  "name": "Bellum Atlas App - Frontend (Vite + React)",
 
   "dockerComposeFile": [
     "../../docker-compose.yml",

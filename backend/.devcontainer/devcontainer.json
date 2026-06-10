@@ -1,5 +1,5 @@
 {
-  "name": "Ares Codex App - Backend (NestJS)",
+  "name": "Bellum Atlas App - Backend (NestJS)",
 
   // Levanta AMBOS compose files, igual que tu "docker compose -f ... -f ..."
   "dockerComposeFile": [

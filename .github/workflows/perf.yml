@@ -1,0 +1,64 @@
+name: Load tests (k6)
+
+# Pruebas de carga sobre la app real. Sensibles a la varianza del runner, así que
+# corren de noche y bajo demanda (no bloquean PRs). Los thresholds de k6 hacen
+# fail del job si se incumple un p95: los hallazgos de rendimiento se vuelven
+# asserts ejecutables.
+on:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  k6:
+    name: k6 smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Usamos el target de DESARROLLO porque necesitamos sembrar datos
+      # (`npm run seed` requiere la CLI de Nest y el código fuente, podados en la
+      # imagen de producción). Publica 3000 para que k6 lo alcance desde el host.
+      - name: Levantar stack + datos
+        run: |
+          cat > .env <<'EOF'
+          NODE_ENV=development
+          BUILD_TARGET=development
+          COMPOSE_PROJECT_NAME=bellum_perf
+          POSTGRES_DB=bellum
+          POSTGRES_USER=bellum
+          POSTGRES_PASSWORD=bellum
+          POSTGRES_PORT=5432
+          POSTGRES_HOST=postgres
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          AI_PROVIDER=mock
+          VITE_API_URL=http://localhost:3000
+          FRONTEND_PORT=5173
+          EOF
+          cat > docker-compose.ci-ports.yml <<'EOF'
+          services:
+            backend:
+              ports:
+                - "3000:3000"
+          EOF
+          docker compose -f docker-compose.yml -f docker-compose.ci-ports.yml up -d --build postgres redis backend
+          echo "Esperando a /health…"
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3000/health && break || sleep 3
+          done
+          docker compose exec -T backend npx prisma migrate deploy
+          docker compose exec -T backend npm run seed
+
+      - uses: grafana/setup-k6-action@v1
+      - name: k6 run
+        run: k6 run perf/smoke.js
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci-ports.yml down -v

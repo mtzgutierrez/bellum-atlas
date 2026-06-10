@@ -1,109 +1,83 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
-import { BattleType } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import { BattleController } from './battle.controller';
 import { BattleService } from './battle.service';
+import type { BattlesQueryDto } from './dto/battle.dto';
 
-// @prisma/client is only available after `prisma generate`.
-jest.mock('@prisma/client', () => ({
-  BattleType: { LAND: 'LAND', NAVAL: 'NAVAL', AIR: 'AIR', SIEGE: 'SIEGE', MIXED: 'MIXED' },
-  PrismaClient: jest.fn(),
-}));
-
-const PAGINATED_STUB = {
-  data: [{ id: 'battle-1', name: 'Batalla de Waterloo' }],
-  meta: { total: 1, page: 1, limit: 20, totalPages: 1 },
-};
-
-const DETAIL_STUB = {
-  id: 'battle-1',
-  name: 'Batalla de Waterloo',
-  factions: [],
-  relatedBattles: [],
-};
-
-const mockBattleService = {
-  findAll: jest.fn(),
-  findOne: jest.fn(),
-};
-
+// Probamos parseFilters/timeline a través del controller con el servicio
+// mockeado: capturamos los filtros que recibe el servicio.
 describe('BattleController', () => {
   let controller: BattleController;
+  let service: jest.Mocked<Pick<BattleService, 'points' | 'list' | 'timeline'>>;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    service = {
+      points: jest.fn().mockResolvedValue([]),
+      list: jest.fn().mockResolvedValue({ data: [], meta: {} }),
+      timeline: jest.fn().mockResolvedValue([]),
+    } as never;
+
+    const moduleRef = await Test.createTestingModule({
       controllers: [BattleController],
-      providers: [{ provide: BattleService, useValue: mockBattleService }],
+      providers: [{ provide: BattleService, useValue: service }],
     }).compile();
-    controller = module.get<BattleController>(BattleController);
+
+    controller = moduleRef.get(BattleController);
   });
 
-  afterEach(() => jest.clearAllMocks());
-
-  // ─── findAll ─────────────────────────────────────────────────────────────
-
-  describe('findAll', () => {
-    it('happy: delegates to service with parsed params', async () => {
-      mockBattleService.findAll.mockResolvedValue(PAGINATED_STUB);
-
-      const result = await controller.findAll(
-        'Waterloo', 'contemporary', 'victory', BattleType.LAND, 'Belgium', '2', '10', 'name',
-      );
-
-      expect(mockBattleService.findAll).toHaveBeenCalledWith({
-        q: 'Waterloo',
-        era: 'contemporary',
-        result: 'victory',
-        type: BattleType.LAND,
-        country: 'Belgium',
-        page: 2,
-        limit: 10,
-        sortBy: 'name',
-      });
-      expect(result).toEqual(PAGINATED_STUB);
+  describe('parseFilters (vía points/list)', () => {
+    it('rechaza rango de años > 150 sin bbox', async () => {
+      const q = { yearMin: '1000', yearMax: '1200' } as BattlesQueryDto;
+      await expect(controller.list(q)).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('edge: undefined page and limit are passed as undefined (not NaN)', async () => {
-      mockBattleService.findAll.mockResolvedValue(PAGINATED_STUB);
-
-      await controller.findAll();
-
-      expect(mockBattleService.findAll).toHaveBeenCalledWith(
-        expect.objectContaining({ page: undefined, limit: undefined }),
-      );
+    it('permite rango > 150 si hay bbox completo', async () => {
+      const q = {
+        yearMin: '1000',
+        yearMax: '1200',
+        bboxN: '40',
+        bboxS: '30',
+        bboxE: '5',
+        bboxW: '-5',
+      } as BattlesQueryDto;
+      await controller.points(q);
+      expect(service.points).toHaveBeenCalledTimes(1);
+      const filters = service.points.mock.calls[0][0];
+      expect(filters.bbox).toEqual({ north: 40, south: 30, east: 5, west: -5 });
     });
 
-    it('error: propagates errors from service', async () => {
-      mockBattleService.findAll.mockRejectedValue(new Error('db error'));
+    it('ignora bbox parcial (falta un borde)', async () => {
+      const q = { bboxN: '40', bboxS: '30', bboxE: '5' } as BattlesQueryDto;
+      await controller.points(q);
+      expect(service.points.mock.calls[0][0].bbox).toBeUndefined();
+    });
 
-      await expect(controller.findAll()).rejects.toThrow('db error');
+    it('descarta type/sort inválidos y conserva los válidos', async () => {
+      await controller.points({ type: 'NOPE', sort: 'year' } as never);
+      const f = service.points.mock.calls[0][0];
+      expect(f.type).toBeUndefined();
+      expect(f.sort).toBe('year');
+    });
+
+    it('convierte yearMin/minImportance no numéricos en undefined', async () => {
+      await controller.points({ yearMin: 'x', minImportance: 'abc' } as never);
+      const f = service.points.mock.calls[0][0];
+      expect(f.yearMin).toBeUndefined();
+      expect(f.minImportance).toBeUndefined();
     });
   });
 
-  // ─── findOne ─────────────────────────────────────────────────────────────
-
-  describe('findOne', () => {
-    it('happy: returns battle detail by id', async () => {
-      mockBattleService.findOne.mockResolvedValue(DETAIL_STUB);
-
-      const result = await controller.findOne('battle-1');
-
-      expect(mockBattleService.findOne).toHaveBeenCalledWith('battle-1');
-      expect(result).toEqual(DETAIL_STUB);
+  describe('timeline', () => {
+    it('capa el límite a 300', async () => {
+      await controller.timeline('5000');
+      expect(service.timeline).toHaveBeenCalledWith(300);
     });
 
-    it('happy: forwards slug to service', async () => {
-      mockBattleService.findOne.mockResolvedValue(DETAIL_STUB);
-
-      await controller.findOne('batalla-de-waterloo');
-
-      expect(mockBattleService.findOne).toHaveBeenCalledWith('batalla-de-waterloo');
-    });
-
-    it('error: propagates NotFoundException from service', async () => {
-      mockBattleService.findOne.mockRejectedValue(new NotFoundException());
-
-      await expect(controller.findOne('ghost')).rejects.toBeInstanceOf(NotFoundException);
+    it('usa 150 por defecto si el límite no es válido', async () => {
+      await controller.timeline('abc');
+      expect(service.timeline).toHaveBeenCalledWith(150);
+      await controller.timeline(undefined);
+      expect(service.timeline).toHaveBeenLastCalledWith(150);
     });
   });
 });

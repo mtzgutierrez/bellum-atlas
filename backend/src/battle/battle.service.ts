@@ -1,34 +1,76 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { BattleRepository } from './battle.repository';
-import { QueryBattleDto } from './dto/query-battle.dto';
+import { fetchArticleText } from '../ai/wikipedia-source';
+import { Paginated, buildMeta } from '../common/pagination.dto';
 import {
-  PaginatedResult,
-  buildMeta,
-  normalisePagination,
-} from '../common/utils/pagination.util';
+  BattleFilters,
+  BattlePoint,
+  BattleRepository,
+  BattleStats,
+  BattleSummary,
+  BattleWithRelations,
+} from './battle.repository';
+
+export interface BattleArticle {
+  article: string | null;
+  sourceUrl: string | null;
+  cached: boolean;
+}
+
+type Page = { page: number; pageSize: number };
 
 @Injectable()
 export class BattleService {
-  constructor(private readonly battleRepository: BattleRepository) {}
+  constructor(private readonly repo: BattleRepository) {}
 
-  async findAll(dto: QueryBattleDto): Promise<PaginatedResult<unknown>> {
-    const { page, limit, skip, take } = normalisePagination(dto.page, dto.limit);
-    const [data, total] = await this.battleRepository.findAll(dto, skip, take);
-    return { data, meta: buildMeta(total, page, limit) };
+  points(filters: BattleFilters): Promise<BattlePoint[]> {
+    return this.repo.findPoints(filters);
   }
 
-  async findOne(idOrSlug: string): Promise<unknown> {
-    const battle = await this.battleRepository.findByIdOrSlug(idOrSlug);
+  // Efemérides: batallas de un día como hoy. `mmdd` = "-MM-DD".
+  onThisDay(mmdd: string): Promise<BattleSummary[]> {
+    return this.repo.findOnThisDay(mmdd);
+  }
 
-    if (!battle) {
-      throw new NotFoundException(`Batalla "${idOrSlug}" no encontrada`);
+  timeline(limit: number): Promise<BattleSummary[]> {
+    return this.repo.findTimeline(limit);
+  }
+
+  centuries(): Promise<{ century: number; count: number }[]> {
+    return this.repo.findCenturyFacets();
+  }
+
+  async list(
+    filters: BattleFilters,
+    p: Page,
+  ): Promise<Paginated<BattleSummary>> {
+    const skip = (p.page - 1) * p.pageSize;
+    const [data, total] = await Promise.all([
+      this.repo.findPaginated(filters, skip, p.pageSize),
+      this.repo.count(filters),
+    ]);
+    return { data, meta: buildMeta(total, p.page, p.pageSize) };
+  }
+
+  async findOne(id: string): Promise<BattleWithRelations> {
+    const battle = await this.repo.findByIdOrSlug(id);
+    if (!battle) throw new NotFoundException(`Batalla "${id}" no encontrada`);
+    return battle;
+  }
+
+  // Artículo completo de Wikipedia con backfill perezoso: si no está cacheado,
+  // se trae una vez y se persiste; las siguientes lecturas son instantáneas.
+  async getArticle(id: string): Promise<BattleArticle> {
+    const src = await this.repo.findArticleSource(id);
+    if (!src) throw new NotFoundException(`Batalla "${id}" no encontrada`);
+    if (src.article) {
+      return { article: src.article, sourceUrl: src.wikipediaUrl, cached: true };
     }
+    const text = await fetchArticleText(src.wikipediaUrl, 9000);
+    if (text) await this.repo.saveArticle(src.id, text);
+    return { article: text, sourceUrl: src.wikipediaUrl, cached: false };
+  }
 
-    const warIds = battle.wars.map((bw) => bw.warId);
-    const relatedBattles = warIds.length
-      ? await this.battleRepository.findRelated(warIds, battle.id)
-      : [];
-
-    return { ...battle, relatedBattles };
+  stats(): Promise<BattleStats> {
+    return this.repo.stats();
   }
 }

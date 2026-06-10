@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
-import { BattleService } from './battle.service';
+import { PrismaModule } from '../prisma/prisma.module';
 import { BattleController } from './battle.controller';
 import { BattleRepository } from './battle.repository';
+import { BattleService } from './battle.service';
 
 @Module({
-  providers: [BattleRepository, BattleService],
+  imports: [PrismaModule],
   controllers: [BattleController],
-  exports: [BattleService],
+  providers: [BattleService, BattleRepository],
+  exports: [BattleService, BattleRepository],
 })
 export class BattleModule {}
