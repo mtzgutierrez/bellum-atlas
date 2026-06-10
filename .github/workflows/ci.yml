@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   checks: write
+  actions: read # codeql-action consulta el workflow-run vía API (get-a-workflow-run)
   pull-requests: read # gitleaks-action lista los commits del PR vía API en eventos pull_request
   security-events: write # para subir SARIF (CodeQL / Trivy) a la pestaña Security
 
