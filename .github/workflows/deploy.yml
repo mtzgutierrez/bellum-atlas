@@ -25,6 +25,7 @@ concurrency:
 
 jobs:
   deploy:
+    environment: production
     name: Deploy · Hetzner
     runs-on: ubuntu-latest
     # Solo si el CI fue en main y terminó correctamente.
