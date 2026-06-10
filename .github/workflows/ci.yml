@@ -193,3 +193,54 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Publica las imágenes de PRODUCCIÓN en GHCR. Se construyen aquí (runner de
+  # GitHub, con RAM de sobra) en vez de en el servidor Hetzner, que se quedaba
+  # sin memoria al hacer `up --build`. El deploy luego solo hace `pull`.
+  #
+  # Solo en push a main y solo si tests + build gate pasaron. Etiqueta cada
+  # imagen con `latest` y con el SHA del commit (para desplegar exactamente lo
+  # construido y poder hacer rollback).
+  # ───────────────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish · GHCR
+    runs-on: ubuntu-latest
+    needs: [test-backend, e2e-backend, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Login a GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Backend · build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          target: production
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-backend:latest
+            ghcr.io/${{ github.repository }}-backend:${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Frontend · build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: production
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-frontend:latest
+            ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend

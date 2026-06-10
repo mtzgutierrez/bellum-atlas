@@ -46,7 +46,7 @@ cat ~/.ssh/id_ed25519.pub   # esto es lo que subes a Hetzner
 Verifica primero en local que el artefacto de producción compila:
 
 ```bash
-cd ~/Workspaces/ares-codex
+cd ~/Workspaces/bellum-atlas
 APP_DOMAIN=ejemplo.com docker compose -f docker-compose.yml -f docker-compose.prod.yml build
 ```
 
@@ -167,8 +167,8 @@ dig +short www.arescodex.com
 
 ```bash
 ssh deploy@TU_IP
-cd ~ && git clone https://github.com/TU_USUARIO/ares-codex.git
-cd ares-codex
+cd ~ && git clone https://github.com/TU_USUARIO/bellum-atlas.git
+cd bellum-atlas
 cp .env.example .env
 ```
 
@@ -282,7 +282,7 @@ ssh -i ~/.ssh/arescodex_deploy deploy@TU_IP 'echo OK'
 Con la GitHub CLI (rápido):
 
 ```bash
-cd ~/Workspaces/ares-codex
+cd ~/Workspaces/bellum-atlas
 gh secret set SSH_HOST --body "TU_IP"
 gh secret set SSH_USER --body "deploy"
 gh secret set SSH_PRIVATE_KEY < ~/.ssh/arescodex_deploy
@@ -317,7 +317,7 @@ Crea el script:
 sudo tee /etc/cron.daily/pg-backup >/dev/null <<'EOF'
 #!/bin/bash
 set -euo pipefail
-cd /home/deploy/ares-codex
+cd /home/deploy/bellum-atlas
 mkdir -p /home/deploy/backups
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
   pg_dump -U arescodex arescodex | gzip > /home/deploy/backups/db-$(date +\%F).sql.gz
@@ -367,7 +367,7 @@ sudo dpkg-reconfigure -plow unattended-upgrades
 
 ```bash
 # Atajo: exporta las flags de compose para no repetirlas
-cd ~/ares-codex
+cd ~/bellum-atlas
 export COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 
 $COMPOSE ps                 # estado de los servicios
@@ -380,7 +380,7 @@ $COMPOSE up -d --build      # reconstruir y levantar (lo que hace el CD)
 Despliegue manual (si quieres forzar uno sin pasar por GitHub):
 
 ```bash
-cd ~/ares-codex
+cd ~/bellum-atlas
 git fetch --all --prune && git reset --hard origin/main
 $COMPOSE up -d --build
 $COMPOSE exec -T backend npx prisma migrate deploy

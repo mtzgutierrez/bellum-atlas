@@ -270,8 +270,8 @@ En `docker-compose.yml` el backend tiene `CORS_ORIGIN: http://localhost:5173` ha
 
 - [ ] Clonar el repo en el servidor como `deploy`:
 ```bash
-cd ~ && git clone https://github.com/TU_USUARIO/ares-codex.git
-cd ares-codex
+cd ~ && git clone https://github.com/TU_USUARIO/bellum-atlas.git
+cd bellum-atlas
 ```
 - [ ] Copiar tu `.env` de producción (§6) a la raíz del proyecto.
 - [ ] Build + arranque:
@@ -333,7 +333,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd ~/ares-codex
+            cd ~/bellum-atlas
             git pull --ff-only
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
             docker compose exec -T backend npx prisma migrate deploy
@@ -351,7 +351,7 @@ jobs:
 - [ ] **Backups de Postgres** (los snapshots de disco de Hetzner no bastan para un restore limpio de BD). Cron diario:
 ```bash
 # /etc/cron.daily/pg-backup  (chmod +x)
-docker compose -f ~/ares-codex/docker-compose.yml exec -T postgres \
+docker compose -f ~/bellum-atlas/docker-compose.yml exec -T postgres \
   pg_dump -U arescodex arescodex | gzip > ~/backups/db-$(date +\%F).sql.gz
 find ~/backups -name 'db-*.sql.gz' -mtime +14 -delete
 ```

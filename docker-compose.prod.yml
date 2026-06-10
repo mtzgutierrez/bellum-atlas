@@ -1,24 +1,31 @@
 # Override de PRODUCCIÓN. Úsalo SIEMPRE junto al base:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # Diferencias respecto al base (docker-compose.yml):
-#   - backend y frontend se construyen en su stage `production` y NO publican
-#     puertos al host: el único servicio accesible desde internet es Caddy
-#     (80/443). El resto se hablan por la red interna `app-network`.
+#   - backend y frontend NO se construyen en el servidor: se descargan ya
+#     construidas desde GHCR (las publica el job `publish` de CI). El server es
+#     pequeño y se quedaba sin RAM al compilar con `up --build`. `build: !reset
+#     null` elimina la sección `build` heredada del base para que compose use la
+#     imagen y nunca intente construir. (Requiere Docker Compose v2.24+.)
+#   - tampoco publican puertos al host: el único servicio accesible desde
+#     internet es Caddy (80/443). El resto se hablan por la red `app-network`.
 #   - postgres y redis dejan de exponerse al host.
 #   - Caddy hace de reverse proxy con HTTPS automático (Let's Encrypt) y enruta
 #     `/` → frontend y `/api/*` → backend (ver Caddyfile).
+#
+# IMAGE_TAG lo fija el deploy al SHA desplegado; por defecto `latest`.
 services:
   backend:
-    build:
-      target: production
+    image: ghcr.io/ualrmg429/bellum-atlas-backend:${IMAGE_TAG:-latest}
+    build: !reset null
     environment:
       NODE_ENV: production
     restart: unless-stopped
 
   frontend:
-    build:
-      target: production
+    image: ghcr.io/ualrmg429/bellum-atlas-frontend:${IMAGE_TAG:-latest}
+    build: !reset null
     # Sin `ports`: el tráfico entra por Caddy a través de la red interna.
     restart: unless-stopped
 
