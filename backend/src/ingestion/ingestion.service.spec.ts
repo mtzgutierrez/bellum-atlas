@@ -1,7 +1,5 @@
-import { ConfigService } from '@nestjs/config';
 import { IngestionService } from './ingestion.service';
 import { WikidataClient, RawBattle } from './wikidata.client';
-import { AiQueueService } from '../ai/ai-queue.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const rawBattle = (over: Partial<RawBattle> = {}): RawBattle => ({
@@ -29,7 +27,6 @@ describe('IngestionService', () => {
   let findUnique: jest.Mock;
   let update: jest.Mock;
   let create: jest.Mock;
-  let enqueue: jest.Mock;
 
   beforeEach(() => {
     client = {
@@ -41,12 +38,9 @@ describe('IngestionService', () => {
     findUnique = jest.fn();
     update = jest.fn().mockResolvedValue({ id: 'updated' });
     create = jest.fn().mockResolvedValue({ id: 'created' });
-    enqueue = jest.fn().mockResolvedValue(undefined);
 
     const prisma = { battle: { findUnique, update, create } } as unknown as PrismaService;
-    const queue = { enqueue } as unknown as AiQueueService;
-    const config = { get: () => '80' } as unknown as ConfigService;
-    service = new IngestionService(client as unknown as WikidataClient, prisma, queue, config);
+    service = new IngestionService(client as unknown as WikidataClient, prisma);
   });
 
   // findUnique responde según se busque por wikidataId o por slug.
@@ -124,29 +118,11 @@ describe('IngestionService', () => {
     expect(data.longitude).toBeNull();
   });
 
-  it('encola IA solo si score supera el umbral', async () => {
-    client.fetchBattle.mockResolvedValue(rawBattle({ sitelinkCount: 90 }));
+  it('la ingesta NO genera narrativa por IA (eso es del enriquecimiento diario)', async () => {
+    // Aunque el score sea muy alto, ingerir una batalla no debe disparar la IA:
+    // la única vía que consume la API es DailyEnrichmentService.
+    client.fetchBattle.mockResolvedValue(rawBattle({ sitelinkCount: 100 }));
     placement({ byQid: null, bySlug: null });
-    await service.ingestBattle('Q100');
-    expect(enqueue).toHaveBeenCalledTimes(1);
-
-    enqueue.mockClear();
-    client.fetchBattle.mockResolvedValue(rawBattle({ sitelinkCount: 50 }));
-    await service.ingestBattle('Q100');
-    expect(enqueue).not.toHaveBeenCalled();
-  });
-
-  it('no encola si enqueueAi:false', async () => {
-    client.fetchBattle.mockResolvedValue(rawBattle({ sitelinkCount: 95 }));
-    placement({ byQid: null, bySlug: null });
-    await service.ingestBattle('Q100', { enqueueAi: false });
-    expect(enqueue).not.toHaveBeenCalled();
-  });
-
-  it('tryEnqueueAi traga el error si la cola falla (Redis caído)', async () => {
-    client.fetchBattle.mockResolvedValue(rawBattle({ sitelinkCount: 95 }));
-    placement({ byQid: null, bySlug: null });
-    enqueue.mockRejectedValue(new Error('Redis down'));
 
     await expect(service.ingestBattle('Q100')).resolves.toBe('created');
   });

@@ -1,3 +1,13 @@
+# Override de PRODUCCIÓN. Úsalo SIEMPRE junto al base:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Diferencias respecto al base (docker-compose.yml):
+#   - backend y frontend se construyen en su stage `production` y NO publican
+#     puertos al host: el único servicio accesible desde internet es Caddy
+#     (80/443). El resto se hablan por la red interna `app-network`.
+#   - postgres y redis dejan de exponerse al host.
+#   - Caddy hace de reverse proxy con HTTPS automático (Let's Encrypt) y enruta
+#     `/` → frontend y `/api/*` → backend (ver Caddyfile).
 services:
   backend:
     build:
@@ -9,14 +19,40 @@ services:
   frontend:
     build:
       target: production
-    ports:
-      - "80:80"
+    # Sin `ports`: el tráfico entra por Caddy a través de la red interna.
     restart: unless-stopped
-
-  scraper:
-    build:
-      target: production
-    restart: no
 
   postgres:
+    # Compose CONCATENA las listas al fusionar varios ficheros, así que un
+    # `ports: []` normal NO quitaría el 5432:5432 del base. `!reset` sí lo
+    # elimina, para no exponer la base de datos a internet. (Requiere Docker
+    # Compose v2.24+.)
+    ports: !reset []
     restart: unless-stopped
+
+  redis:
+    ports: !reset []
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+
+volumes:
+  caddy_data:
+  caddy_config:

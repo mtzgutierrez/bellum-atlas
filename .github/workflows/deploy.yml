@@ -1,0 +1,61 @@
+name: Deploy
+
+# Despliegue continuo a Hetzner.
+#
+# Se dispara cuando el workflow "CI" (.github/workflows/ci.yml) TERMINA en la
+# rama main. El job solo sigue adelante si ese CI acabó en `success`, de modo
+# que NUNCA se despliega código que no haya pasado tests + build gate.
+#
+# Secrets necesarios (Settings → Secrets and variables → Actions):
+#   SSH_HOST         IP pública del servidor Hetzner.
+#   SSH_USER         usuario de deploy (p. ej. `deploy`).
+#   SSH_PRIVATE_KEY  clave privada de un par DEDICADO al deploy (su .pub va en
+#                    ~/.ssh/authorized_keys del usuario de deploy en el servidor).
+#   SSH_PORT         (opcional) puerto SSH; por defecto 22.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+# Un único despliegue a la vez; no cancelamos uno en curso (podría dejar el
+# servidor a medias), los encolamos.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy · Hetzner
+    runs-on: ubuntu-latest
+    # Solo si el CI fue en main y terminó correctamente.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ~/ares-codex
+
+            # Trae main exactamente como está en el remoto (descarta cualquier
+            # cambio local del servidor; el .env de prod está gitignored y no se
+            # toca).
+            git fetch --all --prune
+            git reset --hard origin/main
+
+            # Reconstruye y levanta el stack de producción.
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+            # Aplica migraciones pendientes (no resetea datos).
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+              exec -T backend npx prisma migrate deploy
+
+            # Libera espacio de imágenes viejas.
+            docker image prune -f

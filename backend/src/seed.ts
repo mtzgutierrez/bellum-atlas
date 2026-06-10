@@ -1,7 +1,6 @@
 /* eslint-disable no-console */
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AiQueueService } from './ai/ai-queue.service';
 import { AppModule } from './app.module';
 import { toSlug } from './common/utils/slug.util';
 import { PrismaService } from './prisma/prisma.service';
@@ -12,8 +11,6 @@ import { PrismaService } from './prisma/prisma.service';
 // Para arranque rápido / tests sin depender de Wikidata. Para poblar de verdad
 // usa `npm run ingest` (ver src/ingest.ts). Idempotente: upsert por slug.
 // =============================================================================
-
-const AI_PREGEN_MIN_SCORE = Number(process.env.AI_AUTO_QUEUE_MIN_SCORE ?? 80);
 
 interface BattleSeed {
   name: string;
@@ -119,21 +116,13 @@ async function main() {
     logger: ['log', 'warn', 'error'],
   });
   const prisma = app.get(PrismaService);
-  const queue = app.get(AiQueueService, { strict: false });
 
-  const highScore: string[] = [];
+  // El seed solo persiste datos. La narrativa por IA NO se dispara aquí: la
+  // genera el enriquecimiento diario (DailyEnrichmentService), única vía que
+  // consume la API.
   for (const data of BATTLES) {
-    const id = await seedBattle(prisma, data);
+    await seedBattle(prisma, data);
     logger.log(`✓ ${data.name} (score ${data.importanceScore})`);
-    if (data.importanceScore > AI_PREGEN_MIN_SCORE) highScore.push(id);
-  }
-
-  for (const battleId of highScore) {
-    try {
-      await queue.enqueue({ battleId, reason: 'auto-ingest' });
-    } catch (err) {
-      logger.warn(`No se pudo encolar IA para ${battleId}: ${(err as Error).message}`);
-    }
   }
 
   logger.log(`Seed completado. ${BATTLES.length} batallas.`);

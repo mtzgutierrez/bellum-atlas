@@ -1,6 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { AiQueueService } from '../ai/ai-queue.service';
 import { toSlug } from '../common/utils/slug.util';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -12,8 +10,6 @@ import {
 export interface IngestOptions {
   // Pausa entre entidades en bulk (cortesía con la API pública). Defecto 1s.
   delayMs?: number;
-  // Encolar IA para batallas con importanceScore por encima del umbral.
-  enqueueAi?: boolean;
 }
 
 export interface BulkOptions extends IngestOptions {
@@ -29,26 +25,25 @@ export interface BulkOptions extends IngestOptions {
 // Paso 2: normalización (años, coords válidas, importanceScore, slug, imagen
 //         renderizable).
 // Paso 3: almacenamiento en Postgres con Prisma (upsert por wikidataId).
-// Paso 4: encolar IA en BullMQ para batallas con importanceScore alto.
+//
+// La generación de narrativa por IA NO se dispara aquí: es responsabilidad
+// exclusiva del enriquecimiento diario (DailyEnrichmentService), que cada día
+// elige UNA batalla (la efeméride del día más importante sin ficha o, si no
+// queda ninguna, la top global sin ficha) y solo esa consume la API.
 //
 // Idempotente: la clave de upsert es el wikidataId.
 // =============================================================================
 @Injectable()
 export class IngestionService {
   private readonly logger = new Logger(IngestionService.name);
-  private readonly aiThreshold: number;
 
   constructor(
     private readonly client: WikidataClient,
     private readonly prisma: PrismaService,
-    private readonly queue: AiQueueService,
-    config: ConfigService,
-  ) {
-    this.aiThreshold = Number(config.get<string>('AI_AUTO_QUEUE_MIN_SCORE') ?? 80);
-  }
+  ) {}
 
   // ─── Una batalla por QID ───────────────────────────────────────────────
-  async ingestBattle(qid: string, opts: IngestOptions = {}): Promise<string | null> {
+  async ingestBattle(qid: string): Promise<string | null> {
     const raw = await this.client.fetchBattle(qid);
     if (!raw) {
       this.logger.warn(`Batalla ${qid} no encontrada en Wikidata.`);
@@ -61,9 +56,6 @@ export class IngestionService {
     const score = clampScore(raw.sitelinkCount);
     const battleId = await this.storeBattle(raw, wiki, score);
 
-    if (opts.enqueueAi !== false && score > this.aiThreshold) {
-      await this.tryEnqueueAi(battleId);
-    }
     this.logger.log(`✓ Batalla "${raw.name}" (${qid}) score=${score}`);
     return battleId;
   }
@@ -77,7 +69,7 @@ export class IngestionService {
     const qids = await this.client.fetchTopBattleQids(limit, offset);
     this.logger.log(`Top batallas: ${qids.length} QIDs (offset ${offset}).`);
     for (const qid of qids) {
-      await this.ingestBattle(qid, opts);
+      await this.ingestBattle(qid);
       await sleep(opts.delayMs ?? 1000);
     }
   }
@@ -109,10 +101,7 @@ export class IngestionService {
           raw.wikipediaUrlEn,
         );
         const score = clampScore(raw.sitelinkCount);
-        const battleId = await this.storeBattle(raw, wiki, score);
-        if (opts.enqueueAi !== false && score > this.aiThreshold) {
-          await this.tryEnqueueAi(battleId);
-        }
+        await this.storeBattle(raw, wiki, score);
         total += 1;
       }
       page += 1;
@@ -187,16 +176,6 @@ export class IngestionService {
       return { action: 'create', slug: `${base}-${qid.toLowerCase()}` };
     }
     return { action: 'create', slug: base };
-  }
-
-  private async tryEnqueueAi(battleId: string): Promise<void> {
-    try {
-      await this.queue.enqueue({ battleId, reason: 'auto-ingest' });
-    } catch (err) {
-      this.logger.warn(
-        `No se pudo encolar IA para ${battleId} (¿Redis caído?): ${(err as Error).message}`,
-      );
-    }
   }
 }
 

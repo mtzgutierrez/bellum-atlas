@@ -1,0 +1,27 @@
+# Reverse proxy + HTTPS automático (Let's Encrypt) para PRODUCCIÓN.
+#
+# Diseño de un solo dominio (same-origin): la SPA se sirve en `/` y la API de
+# NestJS en `/api/*`. El frontend (frontend/src/services/api.ts) llama a rutas
+# RELATIVAS `/api/...`, así que aquí quitamos ese prefijo antes de pasar la
+# petición al backend — exactamente lo que hace el proxy de Vite en desarrollo.
+# Ventaja: cero CORS y cero cambios de código entre dev y prod.
+{
+	# Email para los avisos de ACME/Let's Encrypt (caducidad, etc.). Opcional.
+	email {$ACME_EMAIL}
+}
+
+{$APP_DOMAIN}, www.{$APP_DOMAIN} {
+	encode gzip
+
+	# API: /api/* → backend, quitando el prefijo /api (handle_path lo recorta).
+	#   /api/battles  →  backend:3000/battles
+	#   /api/health   →  backend:3000/health
+	handle_path /api/* {
+		reverse_proxy backend:3000
+	}
+
+	# Todo lo demás → frontend (Nginx sirve la SPA y su fallback a index.html).
+	handle {
+		reverse_proxy frontend:80
+	}
+}
