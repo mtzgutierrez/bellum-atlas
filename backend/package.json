@@ -25,6 +25,9 @@
     "ai:import": "nest start --entryFile ai-import --",
     "backfill:articles": "nest start --entryFile backfill-articles --"
   },
+  "overrides": {
+    "fast-uri": "^3.1.2"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.97.1",
     "@nestjs/bullmq": "^11.0.4",

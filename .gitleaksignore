@@ -1,0 +1,6 @@
+# Falsos positivos suprimidos por fingerprint (gitleaks los lee automáticamente).
+#
+# Placeholder del README por defecto de NestJS: badge de CircleCI con un token de
+# ejemplo (`abc123def456`) en una URL de shields.io. No es un secreto real y el
+# archivo backend/README.md ya fue eliminado del árbol (commit b40c53a).
+1790ce02d694c31d80423243e3ec28b9004b38c6:backend/README.md:generic-api-key:5
