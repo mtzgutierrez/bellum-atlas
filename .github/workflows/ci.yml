@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   checks: write
+  pull-requests: read # gitleaks-action lista los commits del PR vía API en eventos pull_request
   security-events: write # para subir SARIF (CodeQL / Trivy) a la pestaña Security
 
 # Cancela ejecuciones en vuelo de la misma PR o rama cuando llega un commit nuevo.
