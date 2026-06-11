@@ -6,6 +6,7 @@ import SmartImage, { TYPE_LABEL } from '../components/SmartImage'
 import TypeIcon from '../components/TypeIcon'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useDebounce } from '../hooks/useDebounce'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { battleService } from '../services/battle.service'
 import type { BattlePoint, BattleType } from '../services/battle.types'
 import { formatBattleDates } from '../utils/dates'
@@ -48,6 +49,11 @@ export default function MapExplorer() {
   const [area, setArea] = useState<Bounds | null>(null)
   // Zoom actual: controla si se puede buscar por zona (evita áreas enormes).
   const [zoom, setZoom] = useState(2)
+  // En móvil/tablet (<960px, igual que el breakpoint del layout) los filtros se
+  // muestran como cajón superpuesto sobre el mapa, accesible con un botón
+  // flotante. En escritorio viven siempre en la barra lateral.
+  const isMobile = useIsMobile(960)
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const debouncedQ = useDebounce(q, 300)
 
@@ -134,6 +140,38 @@ export default function MapExplorer() {
     setZoom(map.getZoom())
     setMapReady(true)
   }, [])
+
+  // Leaflet calcula el tamaño del contenedor al inicializarse; si el layout
+  // cambia después (rotación, cambio móvil↔escritorio, apertura del cajón) los
+  // tiles se quedan grises hasta que se le avisa. Observamos el contenedor y
+  // reaccionamos también a resize de ventana.
+  useEffect(() => {
+    if (!mapReady || !mapEl.current) return
+    const map = mapRef.current
+    if (!map) return
+    const invalidate = () => map.invalidateSize()
+    const ro = new ResizeObserver(invalidate)
+    ro.observe(mapEl.current)
+    window.addEventListener('resize', invalidate)
+    window.addEventListener('orientationchange', invalidate)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', invalidate)
+      window.removeEventListener('orientationchange', invalidate)
+    }
+  }, [mapReady])
+
+  // Mientras el cajón está abierto en móvil, bloqueamos el scroll del fondo.
+  // (En escritorio el cajón no existe, así que el bloqueo no debe aplicarse;
+  // esto también lo libera si se redimensiona la ventana a escritorio.)
+  useEffect(() => {
+    if (!filtersOpen || !isMobile) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [filtersOpen, isMobile])
 
   // Clustering propio por rejilla de pantalla: agrupa puntos cercanos en
   // píxeles. 1 punto → marcador normal; varios → burbuja con el recuento que
@@ -260,21 +298,39 @@ export default function MapExplorer() {
     clearFocus()
   }
 
-  const hasFilters =
-    q.length > 0 ||
-    yearMin !== DEFAULT_MIN ||
-    yearMax !== DEFAULT_MAX ||
-    type != null ||
-    onlyRelevant ||
-    area != null ||
-    focusSlug != null
+  // Filtros activos respecto al estado por defecto (para el contador del botón
+  // flotante en móvil). El periodo por defecto no cuenta como filtro.
+  const activeFilterCount =
+    (q.length > 0 ? 1 : 0) +
+    (type != null ? 1 : 0) +
+    (onlyRelevant ? 1 : 0) +
+    (area != null ? 1 : 0) +
+    (yearMin !== DEFAULT_MIN || yearMax !== DEFAULT_MAX ? 1 : 0)
+
+  const hasFilters = activeFilterCount > 0 || focusSlug != null
 
   const summary = useMemo(() => summarize(items), [items])
 
   return (
     <div className="map-page">
-      <aside className="map-sidebar">
+      <aside className={`map-sidebar${filtersOpen ? ' filters-open' : ''}`}>
+        <button
+          className="map-filters-backdrop"
+          aria-label="Cerrar filtros"
+          tabIndex={filtersOpen ? 0 : -1}
+          onClick={() => setFiltersOpen(false)}
+        />
         <div className="map-filters">
+          <div className="map-filters-head">
+            <span>Filtros</span>
+            <button
+              className="map-filters-close"
+              aria-label="Cerrar filtros"
+              onClick={() => setFiltersOpen(false)}
+            >
+              <Icon name="x" size={18} />
+            </button>
+          </div>
           <div className="filter-group">
             <label className="filter-label">
               <span>Buscar por nombre</span>
@@ -368,6 +424,15 @@ export default function MapExplorer() {
               Restablecer filtros
             </button>
           )}
+
+          {/* Solo móvil: confirma y cierra el cajón mostrando el recuento. */}
+          <button
+            className="btn btn-primary map-filters-apply"
+            onClick={() => setFiltersOpen(false)}
+          >
+            Ver {loading ? '…' : items.length.toLocaleString('es-ES')} resultado
+            {items.length === 1 ? '' : 's'}
+          </button>
         </div>
 
         <div className="map-results">
@@ -435,6 +500,19 @@ export default function MapExplorer() {
 
       <div className="map-canvas">
         <div id="leaflet-map" ref={mapEl} />
+
+        {/* Botón flotante para abrir el cajón de filtros (solo móvil/tablet). */}
+        <button
+          className="map-fab-filters"
+          onClick={() => setFiltersOpen(true)}
+          aria-label="Abrir filtros"
+        >
+          <Icon name="sliders" size={16} />
+          <span>Filtros</span>
+          {activeFilterCount > 0 && (
+            <span className="map-fab-count">{activeFilterCount}</span>
+          )}
+        </button>
 
         {/* Buscar en esta zona (solo con suficiente zoom) */}
         <button
