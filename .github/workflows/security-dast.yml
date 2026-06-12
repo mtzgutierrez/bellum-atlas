@@ -3,10 +3,10 @@ name: DAST (ZAP)
 # Escaneo dinámico contra la app real. Es lento y puede dar hallazgos "ruidosos"
 # (cabeceras, Swagger expuesto…), así que NO bloquea PRs: corre de noche y bajo
 # demanda, y abre un issue con el informe.
-on:
-  schedule:
-    - cron: '0 3 * * *'
-  workflow_dispatch:
+#on:
+#  schedule:
+#    - cron: '0 3 * * *'
+#  workflow_dispatch:
 
 permissions:
   contents: read

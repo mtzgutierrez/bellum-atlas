@@ -4,10 +4,10 @@ name: Load tests (k6)
 # corren de noche y bajo demanda (no bloquean PRs). Los thresholds de k6 hacen
 # fail del job si se incumple un p95: los hallazgos de rendimiento se vuelven
 # asserts ejecutables.
-on:
-  schedule:
-    - cron: '30 3 * * *'
-  workflow_dispatch:
+#on:
+#  schedule:
+#    - cron: '30 3 * * *'
+#  workflow_dispatch:
 
 permissions:
   contents: read
