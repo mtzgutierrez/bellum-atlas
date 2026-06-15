@@ -17,14 +17,14 @@
 # IMAGE_TAG lo fija el deploy al SHA desplegado; por defecto `latest`.
 services:
   backend:
-    image: ghcr.io/ualrmg429/bellum-atlas-backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/mtzgutierrez/bellum-atlas-backend:${IMAGE_TAG:-latest}
     build: !reset null
     environment:
       NODE_ENV: production
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/ualrmg429/bellum-atlas-frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/mtzgutierrez/bellum-atlas-frontend:${IMAGE_TAG:-latest}
     build: !reset null
     # Sin `ports`: el tráfico entra por Caddy a través de la red interna.
     restart: unless-stopped
